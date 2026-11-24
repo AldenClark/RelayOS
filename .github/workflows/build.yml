@@ -44,6 +44,10 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Ensure sufficient disk space on hosted runner
+        if: inputs.mode == 'firmware'
+        run: scripts/runner-preflight.sh
+
       - name: Install build and verification tools
         run: |
           sudo apt-get update
@@ -66,18 +70,37 @@ jobs:
       - name: Run console regression tests
         run: scripts/test-console.sh "$DEVICE"
 
-      - name: Cache source downloads
+      - name: Restore source download cache
+        id: source_cache
         if: inputs.mode == 'firmware'
-        uses: actions/cache@v5
+        uses: actions/cache/restore@v5
         with:
           path: work/${{ inputs.device }}/openwrt/dl
-          key: relayos-downloads-${{ inputs.device }}-${{ hashFiles('upstream.lock', 'feeds.conf') }}
+          key: relayos-downloads-${{ inputs.device }}-${{ hashFiles('upstream.lock', 'feeds.conf', 'configs/**/*.config') }}
           restore-keys: |
             relayos-downloads-${{ inputs.device }}-
 
-      - name: Build and verify firmware
+      - name: Download locked source archives
         if: inputs.mode == 'firmware'
-        run: scripts/build.sh "$DEVICE"
+        run: scripts/build.sh "$DEVICE" download
+
+      # Preserve downloaded sources before a lengthy compilation. A later
+      # runner failure should not force downloading all source archives again.
+      - name: Save source download cache
+        if: inputs.mode == 'firmware' && steps.source_cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        continue-on-error: true
+        with:
+          path: work/${{ inputs.device }}/openwrt/dl
+          key: ${{ steps.source_cache.outputs.cache-primary-key }}
+
+      - name: Compile selected firmware
+        if: inputs.mode == 'firmware'
+        run: scripts/build.sh "$DEVICE" compile
+
+      - name: Verify and collect selected firmware
+        if: inputs.mode == 'firmware'
+        run: scripts/build.sh "$DEVICE" verify
 
       - name: Preserve diagnostics if validation or build fails
         if: failure()
@@ -88,6 +111,7 @@ jobs:
           include-hidden-files: true
           retention-days: 7
           path: |
+            work/${{ inputs.device }}/build-logs/*.log
             work/${{ inputs.device }}/openwrt/.config
             work/${{ inputs.device }}/openwrt/tmp/relayos-kernel-merged.config
             work/${{ inputs.device }}/openwrt/build_dir/target-*/linux-airoha_${{ env.SUBTARGET }}/linux-*/.config
@@ -149,5 +173,5 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "RelayOS ${{ inputs.device }} (${{ env.SUBTARGET }}) #${{ github.run_number }}" \
-            --notes "Nokia XG-040G-$DEVICE ($SUBTARGET), UBI boot layout ONLY. Kernel WireGuard, copper Ethernet, no PON. Source: $GITHUB_SHA; OpenWrt: https://github.com/openwrt/openwrt/commit/$upstream. Hardware acceptance is separate from build verification." \
+            --notes "Nokia XG-040G-$DEVICE ($SUBTARGET), UBI boot layout ONLY. Kernel WireGuard and opt-in IPsec, copper Ethernet, no PON. Source: $GITHUB_SHA; OpenWrt: https://github.com/openwrt/openwrt/commit/$upstream. Hardware acceptance is separate from build verification." \
             --prerelease

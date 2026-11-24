@@ -230,6 +230,18 @@ needed for upstream dependency metadata are registered selectively in the
 build tree, not installed into the firmware; configuration and manifest
 checks reject unwanted components.
 
+Firmware builds on GitHub-hosted Linux runners remove only known unused
+SDK directories as needed, with a 30 GiB free-space target and a 25 GiB
+preflight minimum. These are conservative build-host budgets, not a
+guarantee of successful compilation. No SDK cleanup is performed on
+self-hosted runners or developer machines. Source archives are cached
+after download, before compilation. Download, compile and verification
+are separate steps with resource heartbeats and per-stage logs. Failed
+builds upload available logs and configs; sudden runner loss may prevent
+the upload. Local builds can also select individual stages:
+`scripts/build.sh mf download`, `scripts/build.sh mf compile`,
+`scripts/build.sh mf verify`. The default one-argument command runs all three.
+
 Only UBI images are published. No workflow flashes hardware or modifies
 bootloaders. Private repository runners and artifact storage may incur
 account usage charges.
