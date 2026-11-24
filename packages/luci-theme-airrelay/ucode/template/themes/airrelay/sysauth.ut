@@ -6,7 +6,7 @@
     <div class="ar-login-icon" aria-hidden="true">
         <span class="ar-login-icon-line"></span><span class="ar-login-icon-line"></span><span class="ar-login-icon-line"></span>
     </div>
-    <div class="ar-login-brand">AirRelay <span>OS</span></div>
+    <div class="ar-login-brand">Relay<span>OS</span></div>
     <div class="ar-login-subbrand">{{ _('EDGE NODE CONSOLE') }}</div>
 
     <h1>{{ _('Welcome back') }}</h1>

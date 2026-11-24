@@ -35,7 +35,7 @@
           <div class="ar-appbar-inner">
             <a class="ar-brand" href="{{ dispatcher.build_url('admin/airrelay/overview') }}">
                 <span class="ar-mark" aria-hidden="true"><span></span><span></span><span></span></span>
-                <span class="ar-brand-copy"><strong>AirRelay</strong><small>NODE CONSOLE</small></span>
+                <span class="ar-brand-copy"><strong>RelayOS</strong><small>NODE CONSOLE</small></span>
             </a>
             <nav class="ar-nav" aria-label="{{ _('Main navigation') }}">
                 <a class="ar-nav-item ar-nav-status" href="{{ dispatcher.build_url('admin/airrelay/overview') }}">

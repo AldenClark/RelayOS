@@ -1,0 +1,144 @@
+name: RelayOS (MD / MF)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Validate configuration only, or build and publish firmware
+        type: choice
+        required: true
+        default: firmware
+        options:
+          - validate
+          - firmware
+
+permissions:
+  contents: read
+
+concurrency:
+  group: relayos-build
+  cancel-in-progress: false
+
+jobs:
+  firmware:
+    name: RelayOS ${ matrix.device }
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - device: md
+            subtarget: an7581
+          - device: mf
+            subtarget: an7583
+    steps:
+      - name: Check out private RelayOS product source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install build and verification tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential bison ccache clang file flex gawk gettext git \
+            libelf-dev libncurses-dev libssl-dev python3 python3-pyelftools \
+            python3-setuptools rsync subversion swig time unzip wget \
+            xz-utils zlib1g-dev zstd device-tree-compiler u-boot-tools
+          df -h .
+
+      - name: Prepare locked OpenWrt and product feed
+        run: scripts/prepare.sh "${{ matrix.device }}"
+
+      - name: Verify native single-profile configuration and kernel fragment
+        run: scripts/configure.sh "${{ matrix.device }}"
+
+      - name: Run console regression tests
+        run: scripts/test-console.sh "${{ matrix.device }}"
+
+      - name: Cache source downloads
+        if: inputs.mode == 'firmware'
+        uses: actions/cache@v4
+        with:
+          path: work/${{ matrix.device }}/openwrt/dl
+          key: relayos-downloads-${{ matrix.device }}-${{ hashFiles('upstream.lock', 'feeds.conf') }}
+          restore-keys: |
+            relayos-downloads-${{ matrix.device }}-
+
+      - name: Build and verify firmware
+        if: inputs.mode == 'firmware'
+        run: scripts/build.sh "${{ matrix.device }}"
+
+      - name: Preserve diagnostics if validation or build fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relayos-debug-${{ matrix.device }}-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          include-hidden-files: true
+          retention-days: 7
+          path: |
+            work/${{ matrix.device }}/openwrt/.config
+            work/${{ matrix.device }}/openwrt/tmp/relayos-kernel-merged.config
+            work/${{ matrix.device }}/openwrt/build_dir/target-*/linux-airoha_${{ matrix.subtarget }}/linux-*/.config
+            work/${{ matrix.device }}/openwrt/bin/targets/airoha/${{ matrix.subtarget }}/*.manifest
+
+      - name: Upload verified firmware and provenance
+        if: inputs.mode == 'firmware'
+        uses: actions/upload-artifact@v4
+        with:
+          name: relayos-build-${{ matrix.device }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/${{ matrix.device }}/
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish verified RelayOS prerelease
+    if: inputs.mode == 'firmware'
+    needs: firmware
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download both verified device outputs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: relayos-build-*-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release-input
+          merge-multiple: true
+
+      - name: Confirm complete and consistent release set
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release-input
+          for pair in md:an7581 mf:an7583; do
+            device="${pair%:*}"
+            subtarget="${pair#*:}"
+            prefix="relayos-airoha-$subtarget-nokia_xg-040g-$device-ubi"
+            test -s "$prefix-squashfs-sysupgrade.itb"
+            test -s "$prefix-initramfs-recovery.itb"
+            for suffix in manifest config.buildinfo kernel.config feeds.buildinfo source.buildinfo; do
+              test -s "relayos-$device.$suffix"
+            done
+            grep -Fx "product_commit=$GITHUB_SHA" "relayos-$device.source.buildinfo"
+            sha256sum -c "RELAYOS-$device-SHA256SUMS"
+          done
+          diff <(grep '^openwrt_commit=' relayos-md.source.buildinfo) \
+               <(grep '^openwrt_commit=' relayos-mf.source.buildinfo)
+
+      - name: Create immutable development prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="relayos-dev-${{ github.run_id }}-${{ github.run_attempt }}"
+          upstream="$(sed -n 's/^openwrt_commit=//p' release-input/relayos-md.source.buildinfo)"
+          gh release create "$tag" release-input/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "RelayOS (MD/MF) #${{ github.run_number }}" \
+            --notes "Nokia XG-040G-MD (AN7581) and XG-040G-MF (AN7583), UBI boot layout ONLY. Kernel WireGuard, copper Ethernet, no PON. Source: $GITHUB_SHA; OpenWrt: $upstream. Hardware acceptance is separate from build verification." \
+            --prerelease

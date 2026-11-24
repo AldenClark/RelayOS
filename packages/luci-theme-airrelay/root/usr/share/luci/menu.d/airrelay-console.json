@@ -1,6 +1,6 @@
 {
   "admin/airrelay": {
-    "title": "AirRelay",
+    "title": "RelayOS",
     "order": 1,
     "action": {
       "type": "firstchild",

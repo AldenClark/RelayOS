@@ -1,8 +1,9 @@
 #!/bin/sh
 
-# AirRelay is the only packaged theme. Also migrate older retained PonWrt/LuCI
+# RelayOS is the only packaged theme. Also migrate older retained PonWrt/LuCI
 # settings on a sysupgrade so they cannot reference a removed theme.
-uci -q set luci.themes.AirRelay='/luci-static/airrelay'
+uci -q set luci.themes.RelayOS='/luci-static/airrelay'
+uci -q delete luci.themes.AirRelay
 uci -q delete luci.themes.Bootstrap
 uci -q delete luci.themes.BootstrapDark
 uci -q delete luci.themes.BootstrapLight
