@@ -216,6 +216,51 @@ function debugResult() { return process.env.IPSEC_TEST_DEBUG?'\n'+(fs.existsSync
 function expectOk(result) { assert.equal(result.ok,true,JSON.stringify(result)+debugResult()); assertions++;return result; }
 function expectError(result,code) { assert.equal(result.ok,false,JSON.stringify(result)+debugResult());assert.equal(result.error,code,JSON.stringify(result)+debugResult());assertions++; }
 try {
+  // Netifd accepts dotted, decimal, octal and hexadecimal IPv4 masks. These
+  // committed reservations must count even before the interface is up, when
+  // the kernel has no normalized address/route to expose to environment().
+  for (const definition of [
+    "config interface 'dormant'\n option proto 'static'\n option auto '0'\n option ipaddr '10.78.1.9/255.255.255.0'\n",
+    "config interface 'dormant'\n option proto 'static'\n option auto '0'\n option ipaddr '10.78.1.9/030'\n",
+    "config interface 'dormant'\n option proto 'static'\n option auto '0'\n option ipaddr '10.78.1.9/0x18'\n",
+    "config interface 'dormant'\n option proto 'static'\n option auto '0'\n option ipaddr '10.91.1.9/24\t10.78.1.9/24'\n",
+    "config route 'dormant_route'\n option interface 'dormant'\n option target '10.78.1.0/255.255.255.0'\n",
+    "config route 'dormant_route'\n option interface 'dormant'\n option target '10.78.1.0/030'\n",
+    "config route 'dormant_route'\n option interface 'dormant'\n option target '10.78.1.0/0x18'\n",
+    "config route 'dormant_route'\n option interface 'dormant'\n option target '0.0.0.0'\n option netmask '128.0.0.0'\n",
+    "config interface 'dormant'\n option proto 'static'\n option auto '0'\n option ipaddr '10.91.1.9/0.0.0.0'\n",
+    "config interface 'dormant'\n option proto 'static'\n option auto '0'\n option ipaddr '10.91.1.9'\n option netmask '0'\n",
+    "config interface 'dormant'\n option proto 'static'\n option auto '0'\n option ipaddr '10.91.1.9/255.0.255.0'\n",
+    "config interface 'dormant'\n option proto 'static'\n option auto '0'\n option ipaddr '10.91.1.9/33'\n",
+    "config interface 'dormant'\n option proto 'static'\n option auto '0'\n option ipaddr '10.91.1.9/08'\n",
+    "config interface 'dormant'\n option proto 'static'\n option auto '0'\n option ipaddr '10.91.1.9/019'\n"
+  ]) {
+    reset(); fs.appendFileSync(path.join(configDir,'network'),definition);
+    const current=expectOk(call('get')), before=filesSnapshot(); patchDevice({calls:[]});
+    expectError(apply({revision:current.revision,enabled:true,peers:[peer(1)]}),'route_conflict');
+    assert.deepEqual(filesSnapshot(),before);
+    assert.ok(!device().calls.some(c=>['init','network','firewall'].includes(c[0])));
+  }
+  // Separate numeric netmasks are also native syntax. Disjoint reservations,
+  // IPv6 addresses and a true default route must not block a valid apply.
+  for (const mask of ['24','030','0x18']) {
+    reset();
+    fs.writeFileSync(path.join(configDir,'network'),read('network').replace(
+      "list addresses '10.77.0.2/32'", "list addresses '10.77.0.2/32'\n list addresses '2001:db8::1/64'"));
+    fs.appendFileSync(path.join(configDir,'network'),
+      "config interface 'dormant'\n option proto 'static'\n option auto '0'\n option ipaddr '10.91.1.9 10.92.1.9'\n option netmask '"+mask+"'\n"+
+      "config route 'default_route'\n option interface 'lan'\n option target '0.0.0.0'\n option netmask '0'\n");
+    const current=expectOk(call('get'));
+    expectOk(apply({revision:current.revision,enabled:true,peers:[peer(1)]}));
+  }
+  // WireGuard's ucode protocol converts numeric prefixes in decimal, unlike
+  // netifd's native static parser. /030 reserves only a /30, not an octal /24.
+  reset();
+  fs.writeFileSync(path.join(configDir,'network'),read('network')
+    .replace('10.77.0.2/32','10.90.0.2/030').replace('10.77.0.1/32','10.90.0.1/030'));
+  const decimalState=expectOk(call('get'));
+  expectOk(apply({revision:decimalState.revision,enabled:true,
+    peers:[{...peer(1),local_address:'10.90.0.6/32',remote_subnets:['10.90.0.5/32']}]}));
   reset();
   let state=expectOk(call('get'));
   assert.equal(state.manual,true);assert.equal(state.enabled,false);assert.equal(state.eip93,true);assert.equal(state.peers.length,0);
@@ -323,8 +368,11 @@ try {
     assert.ok(!device().calls.some(c=>['init','network','firewall'].includes(c[0])));
     state=expectOk(apply({revision:state.revision,enabled:false,peers:[peer(1)]}));
     assert.equal(state.enabled,false);
-    fs.writeFileSync(networkFile,read('network').replace("option proto 'wireguard'", "option proto 'wireguard'\n\toption disabled '1'"));
-    state=expectOk(call('get'));state=expectOk(apply({...nextConfig(state),enabled:true}));
+    const networkWithListener=read('network');
+    for(const disabled of ['1','true']){
+      fs.writeFileSync(networkFile,networkWithListener.replace("option proto 'wireguard'", "option proto 'wireguard'\n\toption disabled '"+disabled+"'"));
+      state=expectOk(call('get'));state=expectOk(apply({...nextConfig(state),enabled:true}));
+    }
   }
   // Detect committed changes during device commands before publication. The
   // other writer's WireGuard settings must never be replaced with our snapshot.
@@ -368,6 +416,27 @@ try {
     assert.equal(device().sas.rp_00000002.number,preserved);
     assert.ok(!device().routes.some(r=>r.metric===42759));
   }
+  // Native fw4 ignores disabled or duplicate zones and restricts IPv6-only
+  // zones without making `fw4 check` fail. Reject unusable IPv4 uplinks before
+  // publishing anything, even if device commands would all return success.
+  for (const alter of [
+    ...['0','off','false','no','invalid'].map(value => text =>
+      text.replace(" option name 'uplink'", " option name 'uplink'\n option enabled '"+value+"'")),
+    ...['ipv6','inet6','invalid'].map(value => text =>
+      text.replace(" option name 'uplink'", " option name 'uplink'\n option family '"+value+"'")),
+    text => "config zone 'other'\n option name 'uplink'\n list network 'other'\n"+text,
+    text => text+"config zone 'other'\n option name 'uplink'\n list network 'other'\n"
+  ]) {
+    reset();fs.writeFileSync(path.join(configDir,'firewall'),alter(read('firewall')));
+    const current=expectOk(call('get')),before=filesSnapshot();patchDevice({calls:[]});
+    expectError(apply({revision:current.revision,enabled:true,peers:[peer(1)]}),'unmanaged_config');
+    assert.deepEqual(filesSnapshot(),before);
+    assert.ok(!device().calls.some(c=>['init','network','firewall','fw4'].includes(c[0])));
+    assert.deepEqual(device().routes,[]);
+  }
+  reset();fs.writeFileSync(path.join(configDir,'firewall'),read('firewall').replace(
+    " option name 'uplink'", " option name 'uplink'\n option enabled 'yes'\n option family 'ipv4'"));
+  state=expectOk(call('get'));expectOk(apply({revision:state.revision,enabled:true,peers:[peer(1)]}));
   // Exercise the resource ceiling with real UCI parsing, not just model mocks.
   reset();state=expectOk(call('get'));
   const group=Array.from({length:64},(_,i)=>({...peer(i+1),remote_subnets:Array.from({length:4},(_,j)=>'10.79.'+(i+1)+'.'+(j+1)+'/32')}));

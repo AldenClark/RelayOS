@@ -37,7 +37,7 @@ return baseclass.extend({
       this._traffic(name, {});
     }
     catch (err) {
-      ui.addNotification(null, E('p', { class: 'alert-message danger' }, err.message || _('Tunnel restart failed.')));
+      ui.addNotification(null, E('p', { class: 'alert-message danger' }, [ err.message || _('Tunnel restart failed.') ]));
     }
     finally {
       this._restarting.delete(name);

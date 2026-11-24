@@ -19,6 +19,51 @@ async function networkWritable() {
 
 function list(value) { return Array.isArray(value) ? value : value ? [ value ] : []; }
 
+function canonicalIPv4(option, prefixes = false, multiple = false) {
+  // LuCI accepts decimal octets and prefixes with leading zeros, but native
+  // inet_pton()/base-0 mask parsing does not. Normalize at write time, also
+  // for unchanged loaded values, while leaving the visible draft untouched.
+  option.forcewrite = true;
+  option.write = function(id, value) {
+    const values = list(value).map(value => {
+      const parts = value.split('/');
+      const address = parts[0].split('.').map(Number).join('.');
+      const mask = parts.length === 2 ? parts[1].split('.').map(Number).join('.') : null;
+      const net = wgConfig.subnet(address, mask);
+      if (!net || parts.length > 2 || (parts.length === 2 && (!prefixes || !parts[1])))
+        throw new Error(_('Enter a valid IPv4 address or prefix.'));
+      return address + (parts.length === 2 ? '/' + net.prefix : '');
+    });
+    uci.set('network', id, this.option, multiple ? values : values[0]);
+  };
+}
+
+function reloadRequired() {
+  const error = new Error(_('Network changes may have been partially saved. Reload this page and review pending changes before applying again.'));
+  error.ipsecSafe = true;
+  error.networkNeedsReload = true;
+  return error;
+}
+
+function lockMap(map) {
+  const root = map?.root;
+  if (!root) return () => {};
+  const inert = root.hasAttribute('inert'), busy = root.getAttribute('aria-busy');
+  const controls = [...root.querySelectorAll('input,select,textarea,button')].map(node => [ node, node.disabled ]);
+  // The native forms are rebuilt after asynchronous preflight/save. Prevent
+  // edits that would otherwise be discarded by that rebuild. Inert also
+  // covers LuCI's custom dropdown/list controls and newly rendered children.
+  root.setAttribute('inert', '');
+  root.setAttribute('aria-busy', 'true');
+  for (const [ node ] of controls) node.disabled = true;
+  return () => {
+    if (!inert) root.removeAttribute('inert');
+    if (busy == null) root.removeAttribute('aria-busy');
+    else root.setAttribute('aria-busy', busy);
+    for (const [ node, disabled ] of controls) node.disabled = disabled;
+  };
+}
+
 function validateManagement(ipsecRoutes) {
   if (uci.get('network', 'lan', 'proto') !== 'static') return;
   const lan = list(uci.get('network', 'lan', 'ipaddr')).map(address =>
@@ -64,30 +109,41 @@ return view.extend({
     option.rmempty = false;
     option.placeholder = '192.168.1.20';
     option.depends('proto', 'static');
+    canonicalIPv4(option, true);
 
     option = section.option(form.Value, 'netmask', _('Subnet mask'));
-    option.datatype = 'ip4addr';
+    option.datatype = 'ip4addr("nomask")';
     option.default = '255.255.255.0';
     option.rmempty = false;
     option.depends('proto', 'static');
+    canonicalIPv4(option);
 
     option = section.option(form.Value, 'gateway', _('Default gateway'));
-    option.datatype = 'ip4addr';
+    option.datatype = 'ip4addr("nomask")';
     option.placeholder = '192.168.1.1';
     option.rmempty = true;
     option.depends('proto', 'static');
+    canonicalIPv4(option);
 
     option = section.option(form.DynamicList, 'dns', _('DNS servers'));
-    option.datatype = 'ip4addr';
+    option.datatype = 'ip4addr("nomask")';
     option.rmempty = true;
     option.depends('proto', 'static');
+    const dnsValid = option.isValid;
+    option.isValid = function(id) {
+      // Native DynamicList.getValue() omits invalid text in its add buffer.
+      // Reject that visible input before parse can save/rebuild and lose it.
+      const pending = this.getUIElement(id)?.node.querySelector('.add-item input.cbi-input-invalid');
+      return dnsValid.call(this, id) && !(pending && pending.value.trim());
+    };
+    canonicalIPv4(option, false, true);
 
     option = section.option(form.DummyValue, '_apply', ' ');
     option.renderWidget = () => this.renderApplyButton();
 
     return Promise.all([map.render(), agent && !agent.managed ? wgConfig.render({
       onMap: wireguard => { this._wireguardMap = wireguard; },
-      onApply: () => this.handleApply(), coordination
+      onApply: () => this.handleApplyClick(), coordination
     }) : Promise.resolve(null)]).then(([node, wireguard]) => {
       return E('div', { class: 'ar-settings-page' }, [
         E('div', { class: 'ar-page-heading' }, E('h2', {}, _('Settings'))),
@@ -101,6 +157,7 @@ return view.extend({
   },
 
   async runNetworkOperation(operation) {
+    if (this._networkNeedsReload) throw reloadRequired();
     // Pinned ui.changes.apply() returns undefined, not a completion promise.
     // Its synchronous modal remains active through confirmation/rollback.
     if (this._networkBusy || document.body.classList.contains('modal-overlay-active')) {
@@ -109,8 +166,12 @@ return view.extend({
       throw error;
     }
     this._networkBusy = true;
+    const unlock = [ this._networkMap, this._wireguardMap ].map(lockMap);
     try { return await operation(); }
-    finally { this._networkBusy = false; }
+    finally {
+      for (const restore of unlock) restore();
+      this._networkBusy = false;
+    }
   },
 
   handleApply() {
@@ -140,9 +201,30 @@ return view.extend({
       const routes = current.peers.flatMap(peer => [ peer.local_address, ...peer.remote_subnets ]);
       validateManagement(routes);
       if (maps.length > 1) await wgConfig.prepare(this._wireguardMap, routes, current.enabled ? [ 500, 4500 ] : []);
-      await uci.save();
+      try { await uci.save(); }
+      catch (error) {
+        // Native UCI saves issue multiple RPCs in parallel. A rejection can
+        // leave anonymous creations acknowledged remotely but still present
+        // in state.creates locally; retrying would duplicate them. Preserve
+        // the visible draft and require a fresh UCI cache before any write.
+        this._networkNeedsReload = true;
+        throw reloadRequired();
+      }
       for (const map of maps) { await map.load(); await map.renderContents(); }
       return ui.changes.apply(true);
+    });
+  },
+
+  handleApplyClick() {
+    // ui.createHandlerFn only resets its button when a promise rejects; it
+    // does not display errors. Keep preflight/RPC failures visible and consume
+    // the event-handler rejection without rebuilding the user's draft.
+    return this.handleApply().catch(error => {
+      const content = [ E('p', {}, [ error.message || _('Unable to apply network settings.') ]) ];
+      if (error.networkNeedsReload)
+        content.push(E('button', { type: 'button', class: 'btn', click: () => window.location.reload() }, _('Reload page')));
+      ui.addNotification(_('Save error'), E('div', {}, content), 'error');
+      return false;
     });
   },
 
@@ -150,7 +232,7 @@ return view.extend({
     return E('button', {
       class: 'btn cbi-button cbi-button-apply important',
       disabled: this._networkMap.readonly || null,
-      click: ui.createHandlerFn(this, 'handleApply')
+      click: ui.createHandlerFn(this, 'handleApplyClick')
     }, _('Save & Apply'));
   },
 

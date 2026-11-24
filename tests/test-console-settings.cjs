@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const root = path.resolve(__dirname, '../packages/luci-theme-relay/htdocs/luci-static/resources');
-let db, calls, permissions, modal, current, statusError, managed, prepareError, captured, pending;
+let db, calls, permissions, modal, current, statusError, managed, prepareError, captured, pending, notifications;
 let readonlyView = false;
 const document = { body: { classList: { contains: name => name === 'modal-overlay-active' && modal } } };
 const L = { hasViewPermission: () => !readonlyView };
@@ -59,16 +59,17 @@ const ui = {
   // The actual pinned LuCI apply API shows a synchronous modal and returns
   // undefined; it does not return its internal apply/confirmation promise.
   changes: { apply(checked) { assert.equal(checked, true); calls.push('native.apply'); modal = true; } },
-  createHandlerFn: (context, method) => () => context[method]()
+  createHandlerFn: (context, method) => () => context[method](),
+  addNotification: (title, content) => { notifications.push({ title, content }); }
 };
 const settings = load('view/relay/settings.js', { view: { extend: value => value }, form: { Map }, uci, ui, rpc,
   systemManager: { render: () => E('section') }, agentState, wgConfig, ipsec, L, E, document, _: value => value });
 
 async function reset() {
   db = { network: { lan: { '.type': 'interface', proto: 'dhcp' } } };
-  calls = []; captured = {}; pending = {}; permissions = { network: true, firewall: true };
+  calls = []; captured = {}; pending = {}; notifications = []; permissions = { network: true, firewall: true };
   modal = false; statusError = null; prepareError = null; managed = false; readonlyView = false;
-  current = { enabled: false, peers: [] }; settings._networkBusy = false;
+  current = { enabled: false, peers: [] }; settings._networkBusy = false; settings._networkNeedsReload = false;
   const data = await settings.load(); await settings.render(data); calls = [];
 }
 async function noSave(operation, pattern) {
@@ -98,7 +99,9 @@ async function run() {
   assert.ok(calls.includes('network.parse') && calls.includes('wireguard.parse'), 'LAN button validates WG draft');
   await reset();
   settings._networkMap.parseError = new Error('Invalid LAN address');
-  await noSave(captured.wg.onApply(), /Invalid LAN address/);
+  assert.equal(await captured.wg.onApply(), false, 'WG button reports the shared validation failure');
+  assert.match(JSON.stringify(notifications), /Invalid LAN address/);
+  assert.ok(!calls.includes('uci.save') && !calls.includes('native.apply'));
   await reset(); prepareError = new Error('Route conflict');
   await noSave(settings.handleApply(), /Route conflict/);
   await reset(); managed = true;

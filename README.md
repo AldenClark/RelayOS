@@ -93,7 +93,9 @@ up to three top-level navigation items:
    confirmation before LuCI's native `/sbin/firstboot -r -y` operation. After
    reset the device uses DHCP; find its new address in the upstream lease table.
    The manual WireGuard editor preserves existing interface names and peers,
-   supports creating a first tunnel, and uses native UCI confirmed apply.
+   supports creating a first tunnel and enabling individual peers, and uses
+   native UCI confirmed apply. Creation and peer add/remove stay in the
+   browser draft until **Save & Apply**; an enabled tunnel needs an enabled peer.
    It fills missing tunnel-zone membership, outbound forwarding/NAT, and
    explicit UDP listener rules; existing firewall assignments remain intact.
    The editor refuses default-route takeover and rechecks Agent ownership
@@ -111,10 +113,14 @@ Management-network and WireGuard forms share native UCI pending changes. Both
 ownership, route overlap and listening-port conflicts, and use LuCI's confirmed
 apply/rollback. IPsec keeps its separate transaction and draft. Same-page
 mutations are serialized, including WireGuard peer add/remove and the native
-apply confirmation modal. Network/firewall write permissions are checked
-independently of other settings on the page. See the
-[control/UI audit](docs/control-ui-audit-2026-11-25.md) for verified fixes and
-remaining device acceptance.
+apply confirmation modal, and form inputs are frozen while a network operation
+is pending. If native UCI saving fails after some writes may have succeeded,
+the page preserves its inputs and requires a reload to review pending changes
+before another write; it does not silently retry anonymous peer creation.
+Network/firewall write permissions are checked independently of other settings
+on the page. See the [first control/UI audit](docs/control-ui-audit-2026-11-25.md)
+and [follow-up audit](docs/control-ui-followup-audit-2026-11-25.md) for verified
+fixes and remaining device acceptance.
 
 The standard `luci-mod-admin-full` back-end views remain installed for
 development and recovery, but they are **not shown in the RelayOS navigation**.

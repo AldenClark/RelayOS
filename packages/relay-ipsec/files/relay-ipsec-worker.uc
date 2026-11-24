@@ -231,7 +231,18 @@ function environment(c) {
         if (s['.type'] == 'interface') ownDevices[s['.name']] = true;
         if (s['.type'] == 'route' && subnet(s.target)) ownRoutes[subnet(s.target).text] = true;
     }
-    function prefix(mask) {
+    function prefix(mask, wireguard) {
+        // Netifd parses numeric masks with strtoul(..., 0), in addition to
+        // dotted masks. Normalize committed native UCI without broadening the
+        // strict CIDR syntax accepted by the RelayOS API itself.
+        // The pinned WireGuard ucode protocol instead parses a decimal prefix
+        // before handing the resulting mask to netifd.
+        if (match(mask, wireguard ? /^[0-9]+$/ : /^(0[xX][0-9a-fA-F]+|0[0-7]*|[1-9][0-9]*)$/)) {
+            let value = int(mask, wireguard ? 10 : 0);
+            if (type(value) != 'int' || value < 0 || value > 32) fail('route_conflict');
+            return value;
+        }
+        if (wireguard) fail('route_conflict');
         let value = ipv4(mask), count = 0, zero = false;
         if (value === null) fail('route_conflict');
         for (let offset = 0; offset < 32; offset++) {
@@ -241,18 +252,34 @@ function environment(c) {
         }
         return count;
     }
+    function configured(value, mask, wireguard) {
+        let parts = split(value, '/');
+        // IPv6 configuration does not reserve any IPv4 address or route.
+        if (index(parts[0], ':') >= 0) return null;
+        if (length(parts) > 2 || ipv4(parts[0]) === null) fail('route_conflict');
+        let bits = length(parts) == 2 ? prefix(parts[1], wireguard) : mask !== null ? prefix(mask, wireguard) : 32;
+        return parts[0] + '/' + bits;
+    }
+    function reserve(target, values, mask, wireguard) {
+        // uci_array_to_blob() splits scalar array options on spaces/tabs;
+        // actual UCI list entries are already distinct values.
+        let entries = type(values) == 'string' ?
+            filter(split(values, wireguard ? /[[:space:]]+/ : /[ \t]+/), (v) => length(v)) : list(values);
+        for (let value in entries) {
+            let normalized = configured(value, mask, wireguard);
+            if (normalized) push(target, normalized);
+        }
+    }
     for (let s in sections(c, 'network')) {
         if (s.relay_owner == owner) continue;
-        if (s['.type'] == 'interface' && s.proto == 'wireguard' && s.disabled != '1' && s.listen_port)
+        if (s['.type'] == 'interface' && s.proto == 'wireguard' &&
+            s.disabled != '1' && s.disabled != 'true' && s.listen_port)
             push(env.wireguard_ports, int(s.listen_port));
-        for (let value in list(s.addresses)) push(env.addresses, index(value, '/') >= 0 ? value : value + '/32');
-        for (let value in list(s.ipaddr)) {
-            let bits = s.netmask ? prefix(s.netmask) : 32;
-            push(env.addresses, index(value, '/') >= 0 ? value : value + '/' + bits);
-        }
-        for (let value in list(s.allowed_ips)) push(env.routes, index(value, '/') >= 0 ? value : value + '/32');
-        if (s['.type'] == 'route' && s.target && s.target != '0.0.0.0' && s.target != 'default')
-            push(env.routes, index(s.target, '/') >= 0 ? s.target : s.target + '/' + (s.netmask ? prefix(s.netmask) : 32));
+        reserve(env.addresses, s.addresses, null, s.proto == 'wireguard');
+        reserve(env.addresses, s.ipaddr, s.netmask);
+        reserve(env.routes, s.allowed_ips, null, true);
+        if (s['.type'] == 'route' && s.target && s.target != 'default')
+            reserve(env.routes, [ s.target ], s.netmask);
     }
     let addr = run([ cmd.ip, '-j', '-4', 'addr', 'show' ], 1);
     if (addr.code != 0) fail('unavailable');
@@ -279,12 +306,22 @@ function environment(c) {
     return env;
 }
 function uplink(c) {
-    let zones = filter(sections(c, 'firewall'), (s) => s['.type'] == 'zone' && index(list(s.network), 'lan') >= 0);
+    let allZones = filter(sections(c, 'firewall'), (s) => s['.type'] == 'zone');
+    let zones = filter(allZones, (s) => index(list(s.network), 'lan') >= 0);
     if (length(zones) != 1 || zones[0].masq != '1' ||
         !match(zones[0].name || '', /^[A-Za-z][A-Za-z0-9_]{0,10}$/)) fail('unmanaged_config');
+    let zone = zones[0], family = zone.family;
+    // fw4 skips disabled/invalid zones and later duplicate names with a
+    // warning, so a successful `fw4 check` cannot prove this uplink exists.
+    // The editor provisions IPv4 forwarding and must not select an IPv6 zone.
+    if (index([ '1', 'on', 'true', 'yes' ], zone.enabled ?? '1') < 0 ||
+        length(filter(allZones, (s) => s.name == zone.name)) != 1 ||
+        (family !== null && (type(family) != 'string' ||
+            (index([ 'any', 'all', '*', 'inet' ], family) < 0 && index(family, '4') < 0))))
+        fail('unmanaged_config');
     for (let s in sections(c, 'firewall'))
         if (s['.type'] == 'zone' && s.name == 'relay_ipsec' && s.relay_owner != owner) fail('name_conflict');
-    return zones[0].name;
+    return zone.name;
 }
 function snapshot() {
     let files = {};

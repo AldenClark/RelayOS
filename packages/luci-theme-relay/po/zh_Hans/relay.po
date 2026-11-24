@@ -634,3 +634,33 @@ msgstr "WireGuard 监听端口与已启用的 IPsec 服务冲突。"
 
 msgid "WireGuard settings are read-only."
 msgstr "当前会话仅可查看 WireGuard 设置。"
+
+msgid "Network changes may have been partially saved. Reload this page and review pending changes before applying again."
+msgstr "部分网络修改可能已保存。请重新加载此页面并检查待应用的修改，然后再尝试应用。"
+
+msgid "Unable to apply network settings."
+msgstr "无法应用网络设置。"
+
+msgid "Save error"
+msgstr "保存出错"
+
+msgid "Reload page"
+msgstr "重新加载页面"
+
+msgid "Enter a valid IPv4 address or prefix."
+msgstr "请输入有效的 IPv4 地址或网段。"
+
+msgid "Keep at least one enabled peer."
+msgstr "请至少保留一个已启用的对端。"
+
+msgid "The firewall forwarding from the tunnel to the management zone is disabled."
+msgstr "隧道分区到管理分区的防火墙转发已停用。"
+
+msgid "The management and tunnel firewall zones must be enabled."
+msgstr "管理网络和隧道使用的防火墙分区必须启用。"
+
+msgid "The management and tunnel firewall zones must support IPv4."
+msgstr "管理网络和隧道使用的防火墙分区必须支持 IPv4。"
+
+msgid "Unable to update the WireGuard draft."
+msgstr "无法更新 WireGuard 草稿。"

@@ -9,9 +9,8 @@ esac
     echo 'Not a configured WireGuard tunnel.' >&2
     exit 2
 }
-[ "$(uci -q get "network.$name.disabled")" != 1 ] || {
-    echo 'WireGuard tunnel is disabled.' >&2
-    exit 3
-}
+case "$(uci -q get "network.$name.disabled")" in
+    1|true) echo 'WireGuard tunnel is disabled.' >&2; exit 3 ;;
+esac
 ubus call "network.interface.$name" down >/dev/null || exit 1
 ubus call "network.interface.$name" up >/dev/null || exit 1

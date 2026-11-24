@@ -35,7 +35,7 @@ esac
   for (const args of [[],['wg','lan'],['wg;reboot'],['wg\nlan'],['']]) {
     const result=run(args); assert.notEqual(result.status,0); assert.deepEqual(result.calls,[]);
   }
-  for(const conditions of [{AR_TEST_PROTO:'dhcp'},{AR_TEST_DISABLED:'1'}]) {
+  for(const conditions of [{AR_TEST_PROTO:'dhcp'},{AR_TEST_DISABLED:'1'},{AR_TEST_DISABLED:'true'}]) {
     const result=run(['wg'],conditions); assert.notEqual(result.status,0); assert.deepEqual(result.calls,[]);
   }
   let result=run(['wg'],{AR_TEST_DOWN_CODE:'1'});

@@ -86,6 +86,13 @@ generated sections carry an ownership marker. Name collisions, unsupported
 unmanaged IPsec configuration, and pending UCI changes cause an explicit error
 instead of overwriting another configuration.
 
+Existing static IPv4 addresses and routes are normalized using the pinned
+netifd mask syntax before overlap checks, including interfaces that are not
+currently up. WireGuard prefixes use their own native decimal interpretation.
+The selected uplink firewall zone must be enabled, unambiguous and usable for
+IPv4: fw4 can skip a disabled or duplicate zone without failing its syntax
+check, so a zero exit status alone is not enough.
+
 Status reads check their revision before and after assembling the response, so
 they cannot pair an old peer list with a newer revision. Apply and rollback also
 compare expected persisted bytes immediately before each publication, including
@@ -180,13 +187,19 @@ LUCI_DIR=/absolute/path/to/pinned/luci \
 JSDOM_MODULE=/absolute/path/to/node_modules/jsdom \
 LUCI_DIR=/absolute/path/to/pinned/luci \
   node tests/test-wireguard-dom.cjs
+
+# Shared native Settings forms/UCI: save failures, input locks and recovery.
+JSDOM_MODULE=/absolute/path/to/node_modules/jsdom \
+LUCI_DIR=/absolute/path/to/pinned/luci \
+  node tests/test-settings-dom.cjs
 ```
 
 Set `LD_LIBRARY_PATH` if the locally built native tools require private shared
 libraries. The DOM test checks the LuCI revision against `feeds.conf` and rejects
 modified upstream DOM/RPC source. The runtime test rewrites only its disposable
 copy's fixed paths and device-command adapters; production code has no test-mode
-environment switch. Neither additional test silently passes without dependencies.
+environment switch. These additional tests fail explicitly when dependencies
+are unavailable.
 
 The host tool revisions in the current OpenWrt lock are ucode
 `dfc64d41fd720163ac21d9feb9cb224d1a80fd75` and UCI
