@@ -11,7 +11,7 @@ function decode(result) {
     throw new Error(_('IPsec service operation failed.'));
   let state;
   try { state = JSON.parse(result.stdout); }
-  catch (_) { throw new Error(_('IPsec service status is unavailable.')); }
+  catch (error) { throw new Error(_('IPsec service status is unavailable.')); }
   if (!state || statusKeys.some(key => typeof state[key] !== 'boolean'))
     throw new Error(_('IPsec service status is unavailable.'));
   return state;
@@ -43,7 +43,7 @@ return baseclass.extend({
         throw new Error(_('IPsec is managed by AirRoute Agent or unavailable.'));
       const next = decode(await fs.exec(helper, [ action ]));
       L.dom.content(panel, this.content(next, agent, readonly, panel));
-    } catch (_) {
+    } catch (error) {
       ui.addNotification(null, E('p', { class: 'alert-message danger' },
         _('IPsec service operation failed. Check the system log and SSH configuration.')));
       const next = await status().catch(() => null);
