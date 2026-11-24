@@ -30,6 +30,8 @@ case "$1" in
     install)
         mkdir -p package/feeds/relayos/luci-theme-relay
         touch package/feeds/relayos/luci-theme-relay/Makefile
+        mkdir -p package/feeds/relayos/relay-ipsec
+        touch package/feeds/relayos/relay-ipsec/Makefile
         ;;
     *) exit 1 ;;
 esac

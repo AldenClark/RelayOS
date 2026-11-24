@@ -6,14 +6,15 @@
 'require relay.system as systemManager';
 'require relay.agent-state as agentState';
 'require relay.wg-config as wgConfig';
+'require relay.ipsec as ipsec';
 
 return view.extend({
   load() {
     return Promise.all([uci.load('network'), uci.load('firewall'),
-      agentState.status().catch(() => null)]);
+      agentState.status().catch(() => null), ipsec.status().catch(() => null)]);
   },
 
-  render([_network, _firewall, agent]) {
+  render([_network, _firewall, agent, ipsecState]) {
     const map = new form.Map('network', _('Network interfaces'));
     map.readonly = !L.hasViewPermission();
     this._networkMap = map;
@@ -59,6 +60,7 @@ return view.extend({
         E('div', { class: 'ar-page-heading' }, E('h2', {}, _('Settings'))),
         node,
         wireguard || (agent ? '' : E('p', { class: 'ar-muted' }, _('Unable to detect AirRoute Agent.'))),
+        ipsec.render(ipsecState, agent, !L.hasViewPermission()),
         systemManager.render()
       ]);
     });

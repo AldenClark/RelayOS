@@ -3,8 +3,8 @@
 Minimal OpenWrt images for the **second-hop AirRelay exit node**. These are
 not general-purpose customer routers. The intended traffic path is:
 
-1. A first-hop server sends IPv4 packets over **Linux kernel WireGuard**.
-2. Linux forwards packets from the WireGuard interface to the copper uplink.
+1. A first-hop server sends IPv4 packets over **Linux kernel WireGuard** or optional native IKEv2/IPsec.
+2. Linux forwards authenticated tunnel packets to the copper uplink.
 3. nftables performs IPv4 masquerading for direct Internet egress.
 4. A future Rust AirRelay Agent handles enrollment, cloud configuration and
    WireGuard peer lifecycle. It does **not** process data-plane packets.
@@ -26,8 +26,8 @@ The two supported devices are:
 - **Included:** SoC Ethernet / DSA / PHY, NAND/UBI, procd, UCI/ubus, netifd,
   Dropbear, firewall4/nftables IPv4 NAT, kernel WireGuard (`kmod-wireguard`),
   `wireguard-tools`, and a small bilingual LuCI HTTPS UI with the **RelayOS Console**
-  theme, `luci-proto-wireguard`, `uhttpd`, `uhttpd-mod-ubus`, and `px5g-mbedtls`.
-- **Excluded:** DHCP server, PPPoE, Wi-Fi, PON userspace, VoIP, strongSwan,
+  theme, a minimal strongSwan/swanctl IKEv2 stack (off by default), kernel XFRM and EIP93 Crypto API support, `luci-proto-wireguard`, `uhttpd`, `uhttpd-mod-ubus`, and `px5g-mbedtls`.
+- **Excluded:** DHCP server, PPPoE, Wi-Fi, PON userspace, VoIP, legacy IPsec starter,
   AirRoute Core, userspace WireGuard, TUN and TPROXY modules.
 - The upstream NPU/crypto support and necessary PHY/flash drivers are
   intentionally retained pending hardware validation.
@@ -53,6 +53,12 @@ The two supported devices are:
   Explicit package configuration excludes router packages without modifying
   target.mk. firewall4 retains its upstream kmod-nft-offload dependency;
   installation of that module does not itself enable flow offloading.
+
+## Second-stage trimming and IPsec
+
+The Nokia UBI boards do not enable the SoC PCIe controllers. Disable the PCI bus and device-specific PCIe PHY in the native kernel fragments; keep Ethernet PCS, PHY, DSA, NPU, RNG, and UBI/FIT recovery. Disable MPTCP and disk swap in the top-level kernel options and remove BusyBox swap tools and SMB mount support. Preserve SSH diagnostics and recovery tools. Both SoCs reserve 60 MiB in the DTS (ATF 2, NPU 10, QDMA0 32, QDMA1 16 MiB); do not alter this layout without hardware and DMA address/buffer testing. Keep debugfs and upstream data-plane settings for qualification. Firmware size and idle-memory gains require actual measurements.
+
+IPsec is installed but not started by default. The Settings page can enable or disable the native IKE service without creating peers, opening firewall ports or changing routes. See [IPsec/SOE qualification](docs/ipsec-soe.md) for provisioning boundaries, EIP93 algorithm support, and why the experimental EN7581 SOE patch stack is not in the default firmware.
 
 ## RelayOS Console (default web UI)
 

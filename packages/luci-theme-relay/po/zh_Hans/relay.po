@@ -358,3 +358,51 @@ msgstr "正在重启…"
 
 msgid "Tunnel restart failed."
 msgstr "隧道重启失败。"
+
+msgid "IPsec service operation failed."
+msgstr "IPsec 服务操作失败。"
+
+msgid "IPsec service status is unavailable."
+msgstr "无法获取 IPsec 服务状态。"
+
+msgid "IPsec is managed by AirRoute Agent or unavailable."
+msgstr "IPsec 由 AirRoute Agent 管理，或当前无法操作。"
+
+msgid "IPsec service operation failed. Check the system log and SSH configuration."
+msgstr "IPsec 服务操作失败，请检查系统日志和 SSH 配置。"
+
+msgid "IKE service ready"
+msgstr "IKE 服务已就绪"
+
+msgid "IKE service still responding"
+msgstr "IKE 服务仍在响应"
+
+msgid "IKE service not responding"
+msgstr "IKE 服务未响应"
+
+msgid "Disabled"
+msgstr "已关闭"
+
+msgid "Enable IPsec"
+msgstr "开启 IPsec"
+
+msgid "Disable IPsec"
+msgstr "关闭 IPsec"
+
+msgid "IPsec (IKEv2)"
+msgstr "IPsec（IKEv2）"
+
+msgid "Connection definitions loaded; this does not prove a tunnel is established."
+msgstr "连接配置已加载；不代表隧道已建立。"
+
+msgid "No connection definitions loaded."
+msgstr "尚未加载连接配置。"
+
+msgid "EIP-93 driver registered; hardware use depends on the negotiated ESP algorithm."
+msgstr "EIP-93 驱动已注册，是否使用硬件加速取决于协商的 ESP 算法。"
+
+msgid "EIP-93 driver not registered."
+msgstr "EIP-93 驱动尚未注册。"
+
+msgid "Configure peers, credentials and XFRM routes through SSH or AirRoute Agent. Enabling the service does not open firewall ports or change routes."
+msgstr "通过 SSH 或 AirRoute Agent 配置对端、凭据和 XFRM 路由。开启服务不会自动开放防火墙端口或修改路由。"

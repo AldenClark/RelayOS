@@ -4,6 +4,7 @@ set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 require_source
+case "$device" in md) pcie_phy=PHY_AIROHA_PCIE ;; mf) pcie_phy=PHY_AIROHA_AN7583_PCIE ;; esac
 shopt -s nullglob
 configs=("$ow"/build_dir/target-*/linux-airoha_"$subtarget"/linux-*/.config)
 [[ ${#configs[@]} -eq 1 ]] || {
@@ -12,7 +13,7 @@ configs=("$ow"/build_dir/target-*/linux-airoha_"$subtarget"/linux-*/.config)
 }
 kernel_config="${configs[0]}"
 
-for feature in EXT4_FS MMC USB_SUPPORT USB DEBUG_INFO "$usb_phy"; do
+for feature in EXT4_FS MMC USB_SUPPORT USB DEBUG_INFO PCI PCIE_MEDIATEK PCIE_MEDIATEK_GEN3 SWAP MPTCP "$usb_phy" "$pcie_phy"; do
     # Kconfig omits symbols that are unavailable on this target. An absent
     # symbol is disabled, just like "# CONFIG_FOO is not set". Only explicit
     # y/m selections prove an unwanted feature was built.
@@ -22,15 +23,14 @@ for feature in EXT4_FS MMC USB_SUPPORT USB DEBUG_INFO "$usb_phy"; do
         exit 1
     fi
 done
-for feature in MTD_UBI UBIFS_FS NET_AIROHA NET_DSA PCS_AIROHA HW_RANDOM_AIROHA; do
+for feature in MTD_UBI UBIFS_FS NET_AIROHA NET_AIROHA_NPU NET_DSA PCS_AIROHA HW_RANDOM_AIROHA; do
     grep -qx "CONFIG_${feature}=y" "$kernel_config" || {
         echo "Kernel is missing critical driver: CONFIG_${feature}" >&2
         exit 1
     }
 done
-grep -Eq '^CONFIG_WIREGUARD=(y|m)$' "$kernel_config" || {
-    echo "Kernel WireGuard was not built." >&2
-    exit 1
-}
+for feature in WIREGUARD XFRM_USER INET_ESP XFRM_INTERFACE CRYPTO_DEV_EIP93; do
+    grep -Eq "^CONFIG_${feature}=(y|m)$" "$kernel_config" || die "Kernel missing required data-plane feature: $feature"
+done
 
 echo "RelayOS $subtarget optimized kernel config verified."

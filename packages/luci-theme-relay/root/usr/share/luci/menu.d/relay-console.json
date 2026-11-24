@@ -53,7 +53,8 @@
       "acl": [
         "luci-mod-network-config",
         "luci-mod-system-flash",
-        "luci-proto-wireguard"
+        "luci-proto-wireguard",
+        "luci-relay-ipsec"
       ]
     }
   },

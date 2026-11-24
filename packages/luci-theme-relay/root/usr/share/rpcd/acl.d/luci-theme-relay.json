@@ -57,5 +57,35 @@
         ]
       }
     }
+  },
+  "luci-relay-ipsec": {
+    "description": "Read IPsec service status and control only the global enable flag",
+    "read": {
+      "ubus": {
+        "file": [
+          "exec"
+        ]
+      },
+      "file": {
+        "/usr/libexec/relay-ipsec status": [
+          "exec"
+        ]
+      }
+    },
+    "write": {
+      "ubus": {
+        "file": [
+          "exec"
+        ]
+      },
+      "file": {
+        "/usr/libexec/relay-ipsec enable": [
+          "exec"
+        ],
+        "/usr/libexec/relay-ipsec disable": [
+          "exec"
+        ]
+      }
+    }
   }
 }

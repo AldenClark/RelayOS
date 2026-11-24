@@ -26,7 +26,17 @@ check_fit() {
     [[ "$(fdtget -t s "$dtb" / compatible)" == "$board "* ]] || die "Incorrect board compatible in FIT"
     [[ "$(fdtget -t s "$dtb" /soc/pcs@1fa08000 status)" == disabled ]] || die "PON PCS not disabled"
     [[ "$(fdtget -t s "$dtb" /soc/pcs@1fa09000 status)" == okay ]] || die "Ethernet PCS not enabled"
-    printf 'Verified FIT board and PCS policy: %s\n' "$(basename "$image")"
+    # Product supports the copper-only Nokia boards, not PCIe expansion.
+    local soc_nodes pci_node
+    soc_nodes="$(fdtget -l "$dtb" /soc)" || die "Cannot inspect SoC device tree"
+    for pci_node in $soc_nodes; do
+        case "$pci_node" in
+            pcie@*) [[ "$(fdtget -t s "$dtb" "/soc/$pci_node" status)" == disabled ]] || die "PCIe node unexpectedly enabled: $pci_node" ;;
+        esac
+    done
+    [[ "$(fdtget -t s "$dtb" /soc/crypto@1fb70000 compatible)" == *inside-secure,safexcel-eip93ies* ]] || die "EIP93 device tree node missing"
+    [[ "$(fdtget -t s "$dtb" /soc/crypto@1fb70000 status 2>/dev/null || true)" != disabled ]] || die "EIP93 device tree node disabled"
+    printf 'Verified FIT board, PCS, PCIe and EIP93 policy: %s\n' "$(basename "$image")"
 }
 sysupgrade="$target_dir/$image_prefix-squashfs-sysupgrade.itb"
 recovery="$target_dir/$image_prefix-initramfs-recovery.itb"

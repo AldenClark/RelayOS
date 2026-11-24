@@ -19,7 +19,30 @@ has_package() {
     awk -v name="$1" '$1 == name { found=1 } END { exit !found }' "$manifest"
 }
 
-for name in kmod-wireguard wireguard-tools firewall4 nftables-json kmod-nft-offload fitblk uboot-envtools luci-mod-admin-full \
+for name in relay-ipsec \
+            strongswan \
+            strongswan-charon \
+            strongswan-swanctl \
+            strongswan-mod-kernel-netlink \
+            strongswan-mod-socket-default \
+            strongswan-mod-vici \
+            strongswan-mod-aes \
+            strongswan-mod-sha2 \
+            strongswan-mod-hmac \
+            strongswan-mod-kdf \
+            strongswan-mod-random \
+            strongswan-mod-drbg \
+            strongswan-mod-curve25519 \
+            strongswan-mod-gcm \
+            strongswan-mod-gmp \
+            kmod-ipsec \
+            kmod-ipsec4 \
+            kmod-xfrm-interface \
+            kmod-crypto-hw-eip93 \
+            kmod-crypto-gcm \
+            xfrm \
+            ip-full \
+            kmod-wireguard wireguard-tools firewall4 nftables-json kmod-nft-offload fitblk uboot-envtools luci-mod-admin-full \
             luci-proto-wireguard luci-lib-uqr resolveip \
             luci-theme-relay luci-i18n-relay-zh-cn \
             uhttpd uhttpd-mod-ubus px5g-mbedtls dropbear; do
@@ -33,7 +56,15 @@ for name in nftables-nojson luci-theme-airrelay luci-i18n-airrelay-zh-cn \
             audit bluez-utils libpam libtirpc kexec-tools lldpd policycoreutils \
             luci-theme-bootstrap luci-theme-bootstrap-dark luci-theme-bootstrap-light \
             dnsmasq dnsmasq-full odhcpd-ipv6only ppp ppp-mod-pppoe \
-            odhcp6c kmod-tun kmod-nft-tproxy strongswan kmod-usb3 kmod-usb-ledtrig-usbport; do
+            odhcp6c kmod-tun kmod-nft-tproxy strongswan-full \
+            strongswan-default \
+            strongswan-minimal \
+            strongswan-isakmp \
+            strongswan-ipsec \
+            strongswan-mod-stroke \
+            strongswan-mod-updown \
+            strongswan-mod-kernel-libipsec \
+            kmod-ipt-ipsec kmod-usb3 kmod-usb-ledtrig-usbport; do
     if has_package "$name"; then
         echo "Unexpected package included: $name" >&2
         exit 1

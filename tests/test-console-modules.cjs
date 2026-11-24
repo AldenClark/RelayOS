@@ -44,6 +44,7 @@ dependencies.wireguard = loadModule('relay/wireguard.js');
 dependencies.systemManager = loadModule('relay/system.js');
 dependencies.agentState = loadModule('relay/agent-state.js');
 dependencies.wgConfig = loadModule('relay/wg-config.js');
+dependencies.ipsec = loadModule('relay/ipsec.js');
 
 const traffic = dependencies.traffic;
 assert.equal(traffic.bytes(1024), '1.0 KB');

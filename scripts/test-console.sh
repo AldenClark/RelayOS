@@ -19,6 +19,9 @@ for source_file in "$console"/htdocs/luci-static/resources/view/relay/*.js \
     node --check "$source_file"
 done
 for test_file in "$product_root"/tests/test-console-*.cjs; do node "$test_file"; done
+sh -n "$product_root/packages/relay-ipsec/files/relay-ipsec"
+sh -n "$product_root/packages/relay-ipsec/files/relay-ipsec-prepare"
+bash "$product_root/tests/test-ipsec-control.sh"
 msgfmt --check --output-file=/dev/null "$console/po/zh_Hans/relay.po"
 if grep -q '/luci-static/bootstrap' "$console/htdocs/luci-static/relay/cascade.css"; then
     die "Console must not import an unbundled theme"
