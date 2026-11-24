@@ -74,7 +74,7 @@ case "$1" in
         touch "$MOCK_STATE/running" ;;
     stop)
         [ "$MOCK_STOP_FAIL" = 0 ] || exit 1
-        rm -f "$MOCK_STATE/running" ;;
+        rm -f "$MOCK_STATE/running" "$MOCK_STATE/loaded" ;;
     *) exit 2 ;;
 esac
 EOF
