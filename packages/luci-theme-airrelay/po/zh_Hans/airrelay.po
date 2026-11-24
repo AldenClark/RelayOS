@@ -1,0 +1,360 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: zh_CN\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "%d Mb/s"
+msgstr "%d Mb/s"
+
+msgid "%d d %d h"
+msgstr "%d 天 %d 小时"
+
+msgid "%d h %d m"
+msgstr "%d 小时 %d 分钟"
+
+msgid "A private console for your edge network"
+msgstr "专属于边缘网络的轻量控制台"
+
+msgid "Automatic (DHCP client)"
+msgstr "自动获取（DHCP 客户端）"
+
+msgid "Cancel"
+msgstr "取消"
+
+msgid "Checking firmware…"
+msgstr "正在检查固件…"
+
+msgid "Checking…"
+msgstr "正在检测…"
+
+msgid "Choose firmware…"
+msgstr "选择固件…"
+
+msgid "Close"
+msgstr "关闭"
+
+msgid "Configuration changes will not persist. Install a supported firmware image."
+msgstr "当前配置无法持久保存，请安装适配设备的正式固件。"
+
+msgid "Confirm firmware upgrade"
+msgstr "确认固件升级"
+
+msgid "Connected"
+msgstr "已连接"
+
+msgid "DNS servers"
+msgstr "DNS 服务器"
+
+msgid "Default gateway"
+msgstr "默认网关"
+
+msgid "Device"
+msgstr "设备"
+
+msgid "Device information"
+msgstr "设备信息"
+
+msgid "Disconnected"
+msgstr "未连接"
+
+msgid "Download"
+msgstr "下行流量"
+
+msgid "EDGE NODE CONSOLE"
+msgstr "边缘节点控制台"
+
+msgid "Ethernet ports"
+msgstr "以太网端口"
+
+msgid "Firmware"
+msgstr "固件版本"
+
+msgid "Firmware not supported"
+msgstr "固件不兼容"
+
+msgid "Firmware upgrade"
+msgstr "系统升级"
+
+msgid "Firmware upgrade command failed."
+msgstr "固件升级命令执行失败。"
+
+msgid "Firmware upload failed."
+msgstr "固件上传失败。"
+
+msgid "Flashing in progress. Do not power off the device. The console will reconnect after reboot."
+msgstr "正在刷写固件，切勿断电。设备重启后控制台会尝试重新连接。"
+
+msgid "Gateway"
+msgstr "网关"
+
+msgid "IPv4 address"
+msgstr "IPv4 地址"
+
+msgid "IPv4 address mode"
+msgstr "IPv4 地址获取方式"
+
+msgid "Install firmware"
+msgstr "开始升级"
+
+msgid "Installing firmware…"
+msgstr "正在升级固件…"
+
+msgid "Interface down"
+msgstr "接口未启动"
+
+msgid "Interface up"
+msgstr "接口已启动"
+
+msgid "Invalid username and/or password! Please try again."
+msgstr "用户名或密码错误，请重试。"
+
+msgid "JavaScript is required for this console."
+msgstr "此控制台需要启用 JavaScript。"
+
+msgid "Keep current settings"
+msgstr "保留当前设置"
+
+msgid "Kernel"
+msgstr "内核版本"
+
+msgid "Language"
+msgstr "界面语言"
+
+msgid "Live status"
+msgstr "实时状态"
+
+msgid "Loading status…"
+msgstr "正在读取状态…"
+
+msgid "Log in"
+msgstr "登录"
+
+msgid "Log out"
+msgstr "退出"
+
+msgid "Main navigation"
+msgstr "主导航"
+
+msgid "Management IPv4"
+msgstr "管理 IPv4"
+
+msgid "Memory used"
+msgstr "内存占用"
+
+msgid "Model"
+msgstr "设备型号"
+
+msgid "No WireGuard interface is configured."
+msgstr "尚未配置 WireGuard 接口。"
+
+msgid "Not configured"
+msgstr "未配置"
+
+msgid "Not installed"
+msgstr "尚未安装"
+
+msgid "Password"
+msgstr "密码"
+
+msgid "Recovery mode"
+msgstr "恢复模式"
+
+msgid "Secure node management"
+msgstr "安全节点管理"
+
+msgid "Selected firmware"
+msgstr "所选固件"
+
+msgid "Set an administrator password"
+msgstr "请设置管理员密码"
+
+msgid "Set password"
+msgstr "设置密码"
+
+msgid "Sign in to manage your edge node."
+msgstr "登录后管理您的边缘节点。"
+
+msgid "Static IPv4"
+msgstr "静态 IPv4"
+
+msgid "Subnet mask"
+msgstr "子网掩码"
+
+msgid "System load"
+msgstr "系统负载"
+
+msgid "The firmware cannot be safely installed on this device. Choose the matching MD or MF sysupgrade image."
+msgstr "此固件无法安全安装在当前设备。请选择对应 MD 或 MF 型号的 sysupgrade 镜像。"
+
+msgid "The image passed compatibility checks. Confirm the checksum and start the upgrade. Do not disconnect power during flashing."
+msgstr "镜像兼容性检查已通过。请核对校验值并确认升级。刷写期间切勿断电。"
+
+msgid "The root account has no password. Set one before connecting to an untrusted network."
+msgstr "root 账户尚无密码，请在接入不可信网络前设置。"
+
+msgid "This image cannot preserve existing settings."
+msgstr "此镜像无法保留现有设置。"
+
+msgid "Total traffic"
+msgstr "累计流量"
+
+msgid "Unavailable"
+msgstr "未获取"
+
+msgid "Updated at %s"
+msgstr "更新于 %s"
+
+msgid "Upload"
+msgstr "上传"
+
+msgid "Uptime"
+msgstr "运行时间"
+
+msgid "Username"
+msgstr "用户名"
+
+msgid "Validating compatibility with this device."
+msgstr "正在校验镜像与设备的兼容性。"
+
+msgid "Welcome back"
+msgstr "欢迎回来"
+
+msgid "Without preserved settings, the management IP may change because RelayOS obtains its address via DHCP."
+msgstr "如果不保留现有配置，RelayOS 会通过 DHCP 获取管理地址，升级后 IP 可能发生变化。"
+
+msgid "WireGuard"
+msgstr "WireGuard"
+
+msgid "WireGuard tunnels"
+msgstr "WireGuard 隧道"
+
+msgid "br-lan · management"
+msgstr "br-lan · 管理接口"
+
+msgid "Settings"
+msgstr "设置"
+
+msgid "Network interfaces"
+msgstr "网络接口"
+
+msgid "System management"
+msgstr "系统管理"
+
+msgid "Reset system"
+msgstr "重置系统"
+
+msgid "Reset system…"
+msgstr "重置系统…"
+
+msgid "Reset system?"
+msgstr "确认重置系统？"
+
+msgid "All settings will be erased and the device will restart. Its management address will be obtained via DHCP."
+msgstr "所有设置将被清除，设备将重新启动，并通过 DHCP 获取管理地址。"
+
+msgid "Resetting system…"
+msgstr "正在重置系统…"
+
+msgid "Erasing settings and restarting. Find the new address in your router’s DHCP leases."
+msgstr "正在清除设置并重启。请在路由器的 DHCP 租约中查找新地址。"
+
+msgid "System reset failed."
+msgstr "系统重置失败。"
+
+msgid "1 hour ago"
+msgstr "1 小时前"
+
+msgid "Now"
+msgstr "现在"
+
+msgid "Save & Apply"
+msgstr "保存并应用"
+
+msgid "Unable to detect AirRoute Agent."
+msgstr "无法检测 AirRoute Agent 状态，请刷新页面。"
+
+msgid "AirRoute Agent is managing WireGuard. Refresh this page."
+msgstr "AirRoute Agent 已接管 WireGuard，请刷新页面。"
+
+msgid "Enter a valid WireGuard key."
+msgstr "请输入有效的 WireGuard 密钥。"
+
+msgid "No firewall zone is assigned to the management interface."
+msgstr "管理接口尚未关联防火墙区域。"
+
+msgid "A firewall rule name is already in use."
+msgstr "防火墙规则名称已被占用。"
+
+msgid "Keep the management default route outside WireGuard."
+msgstr "请勿将设备默认路由切换到 WireGuard。"
+
+msgid "Create tunnel"
+msgstr "创建隧道"
+
+msgid "Interface name is already in use."
+msgstr "接口名称已被占用。"
+
+msgid "Enable tunnel"
+msgstr "启用隧道"
+
+msgid "Private key"
+msgstr "私钥"
+
+msgid "Local public key"
+msgstr "本机公钥"
+
+msgid "Tunnel IPv4 addresses"
+msgstr "隧道 IPv4 地址"
+
+msgid "Listen port"
+msgstr "监听端口"
+
+msgid "Automatic"
+msgstr "自动"
+
+msgid "Peers"
+msgstr "对端"
+
+msgid "Add peer"
+msgstr "添加对端"
+
+msgid "Name"
+msgstr "名称"
+
+msgid "Peer public key"
+msgstr "对端公钥"
+
+msgid "Preshared key"
+msgstr "预共享密钥"
+
+msgid "Endpoint host"
+msgstr "对端地址"
+
+msgid "Endpoint port"
+msgstr "对端端口"
+
+msgid "Allowed IPv4 addresses"
+msgstr "允许的 IPv4 地址"
+
+msgid "Create routes for allowed addresses"
+msgstr "为允许的地址创建路由"
+
+msgid "Keepalive interval"
+msgstr "保活间隔（秒）"
+
+msgid "Configure"
+msgstr "配置"
+
+msgid "Keep at least one peer."
+msgstr "请至少保留一个对端。"
+
+msgid "Restart tunnel"
+msgstr "重启隧道"
+
+msgid "Restarting…"
+msgstr "正在重启…"
+
+msgid "Tunnel restart failed."
+msgstr "隧道重启失败。"

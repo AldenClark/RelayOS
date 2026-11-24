@@ -1,0 +1,12 @@
+diff --git a/target/linux/airoha/dts/an758x-nokia_xg-040g-common.dtsi b/target/linux/airoha/dts/an758x-nokia_xg-040g-common.dtsi
+--- a/target/linux/airoha/dts/an758x-nokia_xg-040g-common.dtsi
++++ b/target/linux/airoha/dts/an758x-nokia_xg-040g-common.dtsi
+@@ -43,7 +43,7 @@
+ };
+ 
+ &pon_pcs {
+-	status = "okay";
++	status = "disabled";
+ };
+ 
+ &snfi {
