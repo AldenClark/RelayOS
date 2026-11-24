@@ -28,7 +28,7 @@ printf '\nsrc-link relayos %s/packages\n' "$product_root" >> "$ow/feeds.conf"
 cd "$ow"
 ./scripts/feeds update packages luci relayos
 for feed in packages luci; do
-    expected="$(awk -v f="$feed" '$2 == f { split($3,a,"^"); print a[2] }' feeds.conf)"
+    expected="$(awk -v f="$feed" '$2 == f { split($3,a,/\^/); print a[2] }' feeds.conf)"
     [[ "$expected" =~ ^[0-9a-f]{40}$ && "$(git -C "feeds/$feed" rev-parse HEAD)" == "$expected" ]] || die "Feed revision mismatch: $feed"
 done
 ./scripts/feeds install -p luci luci-mod-admin-full luci-proto-wireguard

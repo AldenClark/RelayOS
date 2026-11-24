@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   firmware:
-    name: RelayOS ${ matrix.device }
+    name: RelayOS ${{ matrix.device }}
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     strategy:
