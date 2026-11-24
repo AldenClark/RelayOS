@@ -4,7 +4,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 require_source
 cd "$ow"
 [[ ! -e .config && ! -e files && ! -e env/kernel-config ]] || die "Refusing to overwrite existing build configuration"
-[[ -e package/feeds/relayos/luci-theme-airrelay/Makefile ]] || die "Local product feed not installed"
+[[ -e package/feeds/relayos/luci-theme-relay/Makefile ]] || die "Local product feed not installed"
 cat "$product_root/configs/common.config" "$product_root/configs/$device.config" > .config
 mkdir -p env files
 cat "$product_root/configs/kernel/common.config" "$product_root/configs/kernel/$device.config" > env/kernel-config
@@ -17,9 +17,9 @@ for feature in \
     CONFIG_TARGET_ROOTFS_INITRAMFS CONFIG_TARGET_ROOTFS_SQUASHFS \
     CONFIG_PACKAGE_kmod-wireguard CONFIG_PACKAGE_wireguard-tools \
     CONFIG_PACKAGE_firewall4 CONFIG_PACKAGE_kmod-nft-offload \
-    CONFIG_PACKAGE_nftables CONFIG_PACKAGE_luci-mod-admin-full \
-    CONFIG_PACKAGE_luci-theme-airrelay CONFIG_PACKAGE_luci-proto-wireguard \
-    CONFIG_LUCI_LANG_zh_Hans CONFIG_PACKAGE_luci-i18n-airrelay-zh-cn \
+    CONFIG_PACKAGE_nftables-json CONFIG_PACKAGE_luci-mod-admin-full \
+    CONFIG_PACKAGE_luci-theme-relay CONFIG_PACKAGE_luci-proto-wireguard \
+    CONFIG_LUCI_LANG_zh_Hans CONFIG_PACKAGE_luci-i18n-relay-zh-cn \
     CONFIG_PACKAGE_fitblk CONFIG_PACKAGE_uboot-envtools \
     CONFIG_PACKAGE_uhttpd CONFIG_PACKAGE_uhttpd-mod-ubus \
     CONFIG_IMAGEOPT CONFIG_VERSIONOPT CONFIG_BUSYBOX_CUSTOM \
@@ -32,6 +32,9 @@ for feature in \
     CONFIG_PACKAGE_odhcp6c CONFIG_PACKAGE_odhcpd-ipv6only \
     CONFIG_PACKAGE_kmod-usb3 CONFIG_PACKAGE_kmod-usb-ledtrig-usbport \
     CONFIG_PACKAGE_luci-theme-bootstrap CONFIG_PACKAGE_luci-theme-bootstrap-dark CONFIG_PACKAGE_luci-theme-bootstrap-light \
+    CONFIG_PACKAGE_nftables-nojson CONFIG_PACKAGE_luci-theme-airrelay CONFIG_PACKAGE_luci-i18n-airrelay-zh-cn \
+    CONFIG_PACKAGE_audit CONFIG_PACKAGE_bluez-utils CONFIG_PACKAGE_libpam CONFIG_PACKAGE_libtirpc \
+    CONFIG_PACKAGE_kexec-tools CONFIG_PACKAGE_lldpd CONFIG_PACKAGE_policycoreutils \
     CONFIG_PACKAGE_kmod-tun CONFIG_PACKAGE_kmod-nft-tproxy CONFIG_PACKAGE_strongswan \
     CONFIG_KERNEL_DEBUG_INFO CONFIG_BUSYBOX_CONFIG_UDHCPD CONFIG_BUSYBOX_CONFIG_DHCPRELAY \
     CONFIG_BUSYBOX_CONFIG_CROND CONFIG_BUSYBOX_CONFIG_CRONTAB CONFIG_BUSYBOX_CONFIG_FEATURE_NTPD_SERVER; do

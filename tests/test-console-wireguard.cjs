@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const resources = path.resolve(__dirname, '../packages/luci-theme-airrelay/htdocs/luci-static/resources/airrelay');
+const resources = path.resolve(__dirname, '../packages/luci-theme-relay/htdocs/luci-static/resources/relay');
 let serviceState = {}, serviceError = null;
 const dependencies = {
   baseclass: { extend: value => value }, _: value => value, form: {}, ui: {},

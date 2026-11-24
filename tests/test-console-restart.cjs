@@ -5,8 +5,8 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const {spawnSync}=require('node:child_process');
-const pkg=path.resolve(__dirname,'../packages/luci-theme-airrelay');
-const helper=path.join(pkg,'root/usr/libexec/airrelay-wg-restart');
+const pkg=path.resolve(__dirname,'../packages/luci-theme-relay');
+const helper=path.join(pkg,'root/usr/libexec/relay-wg-restart');
 const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'airrelay-restart-'));
 const log=path.join(tmp,'calls');
 try {
@@ -42,14 +42,14 @@ esac
   assert.notEqual(result.status,0); assert.deepEqual(result.calls,['call network.interface.wg down']);
   result=run(['wg'],{AR_TEST_UP_CODE:'1'}); assert.notEqual(result.status,0);
   assert.deepEqual(result.calls,['call network.interface.wg down','call network.interface.wg up']);
-  const acl=JSON.parse(fs.readFileSync(path.join(pkg,'root/usr/share/rpcd/acl.d/luci-theme-airrelay.json'),'utf8'));
-  assert.deepEqual(acl['luci-airrelay-wireguard-restart'].write.file,{'/usr/libexec/airrelay-wg-restart *':['exec']});
-  assert.equal(acl['luci-theme-airrelay'].write.ubus?.file,undefined);
+  const acl=JSON.parse(fs.readFileSync(path.join(pkg,'root/usr/share/rpcd/acl.d/luci-theme-relay.json'),'utf8'));
+  assert.deepEqual(acl['luci-relay-wireguard-restart'].write.file,{'/usr/libexec/relay-wg-restart *':['exec']});
+  assert.equal(acl['luci-theme-relay'].write.ubus?.file,undefined);
 } finally {fs.rmSync(tmp,{recursive:true,force:true});}
 async function frontend() {
   const calls=[],notifications=[],samples=[];
   let resolveCommand;
-  const source=fs.readFileSync(path.join(pkg,'htdocs/luci-static/resources/airrelay/wireguard.js'),'utf8');
+  const source=fs.readFileSync(path.join(pkg,'htdocs/luci-static/resources/relay/wireguard.js'),'utf8');
   const mod=new Function('baseclass','rpc','fs','ui','traffic','E','_',source)(
     {extend:x=>x},{declare:()=>()=>Promise.resolve({})},
     {exec:(program,args)=>{calls.push([program,args]);return new Promise(resolve=>{resolveCommand=resolve;});}},
@@ -58,7 +58,7 @@ async function frontend() {
   mod._restarting=new Set(); mod._traffic=(name,state)=>samples.push([name,state]);
   const first=mod.restart('wg');
   await mod.restart('wg'); assert.equal(calls.length,1);
-  assert.deepEqual(calls[0],['/usr/libexec/airrelay-wg-restart',['wg']]);
+  assert.deepEqual(calls[0],['/usr/libexec/relay-wg-restart',['wg']]);
   assert.equal(mod._restarting.has('wg'),true);
   resolveCommand({code:0}); await first;
   assert.equal(mod._restarting.size,0); assert.deepEqual(samples,[['wg',{}]]);

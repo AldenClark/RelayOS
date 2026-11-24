@@ -56,15 +56,15 @@ The two supported devices are:
 
 ## RelayOS Console (default web UI)
 
-Both UBI images bundle `luci-theme-airrelay` as the default LuCI theme, with
+Both UBI images bundle `luci-theme-relay` as the default LuCI theme, with
 up to three top-level navigation items:
 
 1. **Realtime status:** uptime, load, memory, management IPv4, port carriers,
    WireGuard interface state and tunnel IPv4 / counters / sampled rates.
    Live readings refresh every five seconds through existing `ubus` services.
-   A small procd service (`airrelay-traffic`) samples `br-lan` byte counters
+   A small procd service (`relay-traffic`) samples `br-lan` byte counters
    every 15 seconds even with no browser open. It atomically retains 241
-   counter snapshots in `/tmp/airrelay-traffic/history`, giving up to one hour
+   counter snapshots in `/tmp/relay-traffic/history`, giving up to one hour
    of rates. Data stays in RAM, is cleared on reboot, and never writes flash.
    Charts use a fixed one-hour time axis and break on counter resets or gaps.
    Bridge counters do not cover all hardware-switched traffic; interface-up
@@ -104,7 +104,7 @@ If a preserved pre-AirRelay configuration points to a removed skin, repair the
 active theme through SSH:
 
 ```sh
-uci set luci.main.mediaurlbase='/luci-static/airrelay'
+uci set luci.main.mediaurlbase='/luci-static/relay'
 uci commit luci
 /etc/init.d/uhttpd reload
 ```
@@ -168,12 +168,12 @@ No private or personal OpenWrt fork, mirror or synchronization is required.
   acceptance checks.
 
 Historical import: AldenClark/openwrt commit
-`71c85225fa124d9d7510f561800bd76e27459c88`. Existing package names,
-LuCI paths, RPC ACLs, UCI interface/rule identities, board compatible
-strings, FIT configuration and UBI layout remain unchanged. Visible branding
-and fresh/default hostnames use RelayOS. Do not rename the internal
-`luci-theme-airrelay` package or the future `airroute-agent` init service
-without an explicit migration plan.
+`71c85225fa124d9d7510f561800bd76e27459c88`. The theme, LuCI paths, RPC ACLs and helper services now use the `relay`
+namespace. UCI interface/rule identities, board compatible strings, FIT
+configuration and UBI layout remain unchanged. Visible branding
+and fresh/default hostnames use RelayOS. The first boot after sysupgrade migrates old theme settings to
+`/luci-static/relay`; the future `airroute-agent` init service and existing
+WireGuard firewall identities are preserved.
 
 The official repository URL and full commit SHA live in `upstream.lock`.
 A fresh build fetches only that commit, checks out detached HEAD, and verifies
@@ -205,25 +205,28 @@ must be the checked PON DTS patch. The local package feed is linked from
 `packages/`, with pinned official feeds. No copy of the OpenWrt repository
 is committed to RelayOS.
 
-The manual-only GitHub Actions workflow **RelayOS (MD / MF)** offers:
+The manual-only GitHub Actions workflow **RelayOS (MD / MF)** lets you
+select **md** (AN7581) or **mf** (AN7583) and the mode:
 
-- `validate`: prepare both targets, resolve defconfig, audit merged kernel
-  fragments and run the console source/regression tests, without compiling
-  the firmware or creating a release.
-- `firmware`: perform the same checks, build both full images and verify
-  their package manifests, final kernel configs, embedded FIT device trees
-  and sysupgrade compatibility metadata. Publish only when both pass.
-
-Both modes first run an offline regression test for the official-only source
-policy, including failure handling and exact commit checkout.
+- `validate`: prepare the selected target, resolve defconfig, audit the
+  merged kernel fragments and run console/source regression tests; no firmware.
+- `firmware`: perform the same checks, build the selected device, verify
+  its package manifest, kernel config, embedded FIT device tree and sysupgrade
+  compatibility metadata, and publish its own prerelease.
 
 Select **Actions → RelayOS (MD / MF) → Run workflow**, branch main.
-Outputs are named `relayos-airoha-...-sysupgrade.itb` and
-`relayos-airoha-...-initramfs-recovery.itb`; the unique prerelease includes
-per-device checksums, manifest, effective OpenWrt/kernel configuration,
-locked feeds and source provenance (official source URL and exact commit). Only UBI images are published. No
-workflow flashes hardware or modifies bootloaders. Private repository
-runners and artifact storage may incur account usage charges.
+Each run builds and releases only the selected device. Releases have tags
+`relayos-dev-<device>-<run_id>-<run_attempt>` and include both UBI sysupgrade
+and recovery images, checksums, package manifest, kernel/build configuration,
+pinned feeds and source provenance. The other model need not be built or pass.
+All JavaScript actions use native Node.js 24 runtimes. Optional packages
+needed for upstream dependency metadata are registered selectively in the
+build tree, not installed into the firmware; configuration and manifest
+checks reject unwanted components.
+
+Only UBI images are published. No workflow flashes hardware or modifies
+bootloaders. Private repository runners and artifact storage may incur
+account usage charges.
 
 The original OpenWrt licenses and component source-offer obligations remain
 applicable; if firmware is distributed, provide corresponding sources and

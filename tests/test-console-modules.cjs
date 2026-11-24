@@ -7,7 +7,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const resources = path.resolve(__dirname,
-  '../packages/luci-theme-airrelay/htdocs/luci-static/resources');
+  '../packages/luci-theme-relay/htdocs/luci-static/resources');
 
 function BaseClass() {}
 BaseClass.extend = function(properties) {
@@ -39,11 +39,11 @@ function loadModule(file) {
   return new constructor();
 }
 
-dependencies.traffic = loadModule('airrelay/traffic.js');
-dependencies.wireguard = loadModule('airrelay/wireguard.js');
-dependencies.systemManager = loadModule('airrelay/system.js');
-dependencies.agentState = loadModule('airrelay/agent-state.js');
-dependencies.wgConfig = loadModule('airrelay/wg-config.js');
+dependencies.traffic = loadModule('relay/traffic.js');
+dependencies.wireguard = loadModule('relay/wireguard.js');
+dependencies.systemManager = loadModule('relay/system.js');
+dependencies.agentState = loadModule('relay/agent-state.js');
+dependencies.wgConfig = loadModule('relay/wg-config.js');
 
 const traffic = dependencies.traffic;
 assert.equal(traffic.bytes(1024), '1.0 KB');
@@ -74,7 +74,7 @@ assert.match(traffic.linePath(history, 'rx', 3600), /^ M1\.3,13\.0 L/);
 const gap = traffic.history('0 0 0\n15 150 150\n75 300 300\n90 450 450', 90);
 assert.equal((traffic.linePath(gap, 'rx', 90).match(/M/g) || []).length, 2);
 
-for (const file of fs.readdirSync(path.join(resources, 'view/airrelay')))
-  if (file.endsWith('.js')) loadModule(`view/airrelay/${file}`);
+for (const file of fs.readdirSync(path.join(resources, 'view/relay')))
+  if (file.endsWith('.js')) loadModule(`view/relay/${file}`);
 
 console.log('RelayOS LuCI modules: factory contracts and traffic sampling OK');

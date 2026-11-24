@@ -1,0 +1,27 @@
+#!/bin/sh
+
+# Set the new theme even when sysupgrade preserves a previous LuCI config.
+uci -q set luci.themes.Relay='/luci-static/relay' || exit 1
+uci -q delete luci.themes.RelayOS
+uci -q delete luci.themes.AirRelay
+uci -q delete luci.themes.Bootstrap
+uci -q delete luci.themes.BootstrapDark
+uci -q delete luci.themes.BootstrapLight
+uci -q set luci.main.mediaurlbase='/luci-static/relay' || exit 1
+
+case "$(uci -q get luci.main.lang)" in
+    en|zh-cn) ;;
+    *) uci -q set luci.main.lang='zh-cn' || exit 1 ;;
+esac
+uci -q commit luci || exit 1
+
+# Keep custom hostnames; migrate only known old defaults.
+old_hostname="$(uci -q get system.@system[0].hostname | tr '[:upper:]' '[:lower:]')"
+case "$old_hostname" in
+    ''|openwrt|ponwrt|airrelay-node|airrelay-os|airrelay)
+        uci -q set system.@system[0].hostname='relayos-node' || exit 1
+        uci -q commit system || exit 1
+        ;;
+esac
+/etc/init.d/relay-traffic enable || exit 1
+exit 0

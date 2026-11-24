@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Regression tests for the AirRelay firmware picker and the LuCI upgrade RPCs.
+// Regression tests for the RelayOS firmware picker and the LuCI upgrade RPCs.
 // The real flash operation is never performed by these tests.
 'use strict';
 
@@ -8,7 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const source = fs.readFileSync(path.resolve(__dirname,
-  '../packages/luci-theme-airrelay/htdocs/luci-static/resources/airrelay/system.js'), 'utf8');
+  '../packages/luci-theme-relay/htdocs/luci-static/resources/relay/system.js'), 'utf8');
 const firmwarePath = '/tmp/firmware.bin';
 
 function verifyPackagedUpgradeContract() {
@@ -16,8 +16,8 @@ function verifyPackagedUpgradeContract() {
   const upstream = process.env.OPENWRT_DIR;
   assert.ok(upstream, 'OPENWRT_DIR must point to prepared OpenWrt checkout');
   const menu = JSON.parse(fs.readFileSync(path.join(repo,
-    'packages/luci-theme-airrelay/root/usr/share/luci/menu.d/airrelay-console.json'), 'utf8'));
-  assert.ok(menu['admin/airrelay/settings'].depends.acl.includes('luci-mod-system-flash'));
+    'packages/luci-theme-relay/root/usr/share/luci/menu.d/relay-console.json'), 'utf8'));
+  assert.ok(menu['admin/relay/settings'].depends.acl.includes('luci-mod-system-flash'));
 
   for (const [subtarget, model] of [ ['an7581', 'md'], ['an7583', 'mf'] ]) {
     const config = fs.readFileSync(path.join(repo, 'configs/common.config'), 'utf8');

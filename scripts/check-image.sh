@@ -19,9 +19,9 @@ has_package() {
     awk -v name="$1" '$1 == name { found=1 } END { exit !found }' "$manifest"
 }
 
-for name in kmod-wireguard wireguard-tools firewall4 kmod-nft-offload fitblk uboot-envtools luci-mod-admin-full \
+for name in kmod-wireguard wireguard-tools firewall4 nftables-json kmod-nft-offload fitblk uboot-envtools luci-mod-admin-full \
             luci-proto-wireguard luci-lib-uqr resolveip \
-            luci-theme-airrelay luci-i18n-airrelay-zh-cn \
+            luci-theme-relay luci-i18n-relay-zh-cn \
             uhttpd uhttpd-mod-ubus px5g-mbedtls dropbear; do
     if ! has_package "$name"; then
         echo "Required package missing: $name" >&2
@@ -29,7 +29,9 @@ for name in kmod-wireguard wireguard-tools firewall4 kmod-nft-offload fitblk ubo
     fi
 done
 
-for name in luci-theme-bootstrap luci-theme-bootstrap-dark luci-theme-bootstrap-light \
+for name in nftables-nojson luci-theme-airrelay luci-i18n-airrelay-zh-cn \
+            audit bluez-utils libpam libtirpc kexec-tools lldpd policycoreutils \
+            luci-theme-bootstrap luci-theme-bootstrap-dark luci-theme-bootstrap-light \
             dnsmasq dnsmasq-full odhcpd-ipv6only ppp ppp-mod-pppoe \
             odhcp6c kmod-tun kmod-nft-tproxy strongswan kmod-usb3 kmod-usb-ledtrig-usbport; do
     if has_package "$name"; then

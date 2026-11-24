@@ -3,6 +3,14 @@ name: RelayOS (MD / MF)
 on:
   workflow_dispatch:
     inputs:
+      device:
+        description: Nokia UBI device to build
+        type: choice
+        required: true
+        default: md
+        options:
+          - md
+          - mf
       mode:
         description: Validate configuration only, or build and publish firmware
         type: choice
@@ -16,25 +24,23 @@ permissions:
   contents: read
 
 concurrency:
-  group: relayos-build
+  group: relayos-build-${{ inputs.device }}
   cancel-in-progress: false
+
+env:
+  DEVICE: ${{ inputs.device }}
+  SUBTARGET: ${{ inputs.device == 'md' && 'an7581' || 'an7583' }}
 
 jobs:
   firmware:
-    name: RelayOS ${{ matrix.device }}
+    name: RelayOS ${{ inputs.device }}
     runs-on: ubuntu-24.04
     timeout-minutes: 360
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - device: md
-            subtarget: an7581
-          - device: mf
-            subtarget: an7583
+    outputs:
+      artifact_id: ${{ steps.firmware_artifact.outputs.artifact-id }}
     steps:
       - name: Check out private RelayOS product source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -52,62 +58,63 @@ jobs:
         run: bash tests/test-upstream-source.sh
 
       - name: Prepare locked OpenWrt and product feed
-        run: scripts/prepare.sh "${{ matrix.device }}"
+        run: scripts/prepare.sh "$DEVICE"
 
       - name: Verify native single-profile configuration and kernel fragment
-        run: scripts/configure.sh "${{ matrix.device }}"
+        run: scripts/configure.sh "$DEVICE"
 
       - name: Run console regression tests
-        run: scripts/test-console.sh "${{ matrix.device }}"
+        run: scripts/test-console.sh "$DEVICE"
 
       - name: Cache source downloads
         if: inputs.mode == 'firmware'
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: work/${{ matrix.device }}/openwrt/dl
-          key: relayos-downloads-${{ matrix.device }}-${{ hashFiles('upstream.lock', 'feeds.conf') }}
+          path: work/${{ inputs.device }}/openwrt/dl
+          key: relayos-downloads-${{ inputs.device }}-${{ hashFiles('upstream.lock', 'feeds.conf') }}
           restore-keys: |
-            relayos-downloads-${{ matrix.device }}-
+            relayos-downloads-${{ inputs.device }}-
 
       - name: Build and verify firmware
         if: inputs.mode == 'firmware'
-        run: scripts/build.sh "${{ matrix.device }}"
+        run: scripts/build.sh "$DEVICE"
 
       - name: Preserve diagnostics if validation or build fails
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: relayos-debug-${{ matrix.device }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: relayos-debug-${{ inputs.device }}-${{ github.run_id }}-${{ github.run_attempt }}
           if-no-files-found: warn
           include-hidden-files: true
           retention-days: 7
           path: |
-            work/${{ matrix.device }}/openwrt/.config
-            work/${{ matrix.device }}/openwrt/tmp/relayos-kernel-merged.config
-            work/${{ matrix.device }}/openwrt/build_dir/target-*/linux-airoha_${{ matrix.subtarget }}/linux-*/.config
-            work/${{ matrix.device }}/openwrt/bin/targets/airoha/${{ matrix.subtarget }}/*.manifest
+            work/${{ inputs.device }}/openwrt/.config
+            work/${{ inputs.device }}/openwrt/tmp/relayos-kernel-merged.config
+            work/${{ inputs.device }}/openwrt/build_dir/target-*/linux-airoha_${{ env.SUBTARGET }}/linux-*/.config
+            work/${{ inputs.device }}/openwrt/bin/targets/airoha/${{ env.SUBTARGET }}/*.manifest
 
       - name: Upload verified firmware and provenance
+        id: firmware_artifact
         if: inputs.mode == 'firmware'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: relayos-build-${{ matrix.device }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: artifacts/${{ matrix.device }}/
+          name: relayos-build-${{ inputs.device }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/${{ inputs.device }}/
           if-no-files-found: error
           retention-days: 7
 
   release:
-    name: Publish verified RelayOS prerelease
+    name: Publish verified RelayOS ${{ inputs.device }} prerelease
     if: inputs.mode == 'firmware'
     needs: firmware
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
-      - name: Download both verified device outputs
-        uses: actions/download-artifact@v4
+      - name: Download selected device output
+        uses: actions/download-artifact@v7
         with:
-          pattern: relayos-build-*-${{ github.run_id }}-${{ github.run_attempt }}
+          artifact-ids: ${{ needs.firmware.outputs.artifact_id }}
           path: release-input
           merge-multiple: true
 
@@ -116,21 +123,19 @@ jobs:
         run: |
           set -euo pipefail
           cd release-input
-          for pair in md:an7581 mf:an7583; do
-            device="${pair%:*}"
-            subtarget="${pair#*:}"
-            prefix="relayos-airoha-$subtarget-nokia_xg-040g-$device-ubi"
-            test -s "$prefix-squashfs-sysupgrade.itb"
-            test -s "$prefix-initramfs-recovery.itb"
-            for suffix in manifest config.buildinfo kernel.config feeds.buildinfo source.buildinfo; do
-              test -s "relayos-$device.$suffix"
-            done
-            grep -Fx "product_commit=$GITHUB_SHA" "relayos-$device.source.buildinfo"
-            grep -Fx "openwrt_source=https://github.com/openwrt/openwrt.git" "relayos-$device.source.buildinfo"
-            sha256sum -c "RELAYOS-$device-SHA256SUMS"
+          prefix="relayos-airoha-$SUBTARGET-nokia_xg-040g-$DEVICE-ubi"
+          test -s "$prefix-squashfs-sysupgrade.itb"
+          test -s "$prefix-initramfs-recovery.itb"
+          for suffix in manifest config.buildinfo kernel.config feeds.buildinfo source.buildinfo; do
+            test -s "relayos-$DEVICE.$suffix"
           done
-          diff <(grep '^openwrt_commit=' relayos-md.source.buildinfo) \
-               <(grep '^openwrt_commit=' relayos-mf.source.buildinfo)
+          grep -Fx "product_commit=$GITHUB_SHA" "relayos-$DEVICE.source.buildinfo"
+          grep -Fx "openwrt_source=https://github.com/openwrt/openwrt.git" "relayos-$DEVICE.source.buildinfo"
+          grep -Fx "device=$DEVICE" "relayos-$DEVICE.source.buildinfo"
+          grep -Fx "board=nokia,xg-040g-$DEVICE-ubi" "relayos-$DEVICE.source.buildinfo"
+          sha256sum -c "RELAYOS-$DEVICE-SHA256SUMS"
+          # Never include the other model or unrelated artifacts in a release.
+          test "$(find . -maxdepth 1 -type f | wc -l)" -eq 8
 
       - name: Create immutable development prerelease
         shell: bash
@@ -138,11 +143,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          tag="relayos-dev-${{ github.run_id }}-${{ github.run_attempt }}"
-          upstream="$(sed -n 's/^openwrt_commit=//p' release-input/relayos-md.source.buildinfo)"
+          tag="relayos-dev-$DEVICE-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          upstream="$(sed -n 's/^openwrt_commit=//p' "release-input/relayos-$DEVICE.source.buildinfo")"
           gh release create "$tag" release-input/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "RelayOS (MD/MF) #${{ github.run_number }}" \
-            --notes "Nokia XG-040G-MD (AN7581) and XG-040G-MF (AN7583), UBI boot layout ONLY. Kernel WireGuard, copper Ethernet, no PON. Source: $GITHUB_SHA; OpenWrt: https://github.com/openwrt/openwrt/commit/$upstream. Hardware acceptance is separate from build verification." \
+            --title "RelayOS ${{ inputs.device }} (${{ env.SUBTARGET }}) #${{ github.run_number }}" \
+            --notes "Nokia XG-040G-$DEVICE ($SUBTARGET), UBI boot layout ONLY. Kernel WireGuard, copper Ethernet, no PON. Source: $GITHUB_SHA; OpenWrt: https://github.com/openwrt/openwrt/commit/$upstream. Hardware acceptance is separate from build verification." \
             --prerelease

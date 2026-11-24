@@ -1,0 +1,72 @@
+{
+  "admin/relay": {
+    "title": "RelayOS",
+    "order": 1,
+    "action": {
+      "type": "firstchild",
+      "preferred": "overview",
+      "recurse": true
+    },
+    "depends": {
+      "acl": [
+        "luci-theme-relay"
+      ]
+    }
+  },
+  "admin/relay/overview": {
+    "title": "Live status",
+    "order": 1,
+    "action": {
+      "type": "view",
+      "path": "relay/overview"
+    },
+    "depends": {
+      "acl": [
+        "luci-theme-relay"
+      ]
+    }
+  },
+  "admin/relay/agent": {
+    "title": "AirRoute Agent",
+    "order": 4,
+    "action": {
+      "type": "view",
+      "path": "relay/agent"
+    },
+    "depends": {
+      "acl": [
+        "luci-theme-relay"
+      ],
+      "fs": {
+        "/etc/init.d/airroute-agent": "executable"
+      }
+    }
+  },
+  "admin/relay/settings": {
+    "title": "Settings",
+    "order": 2,
+    "action": {
+      "type": "view",
+      "path": "relay/settings"
+    },
+    "depends": {
+      "acl": [
+        "luci-mod-network-config",
+        "luci-mod-system-flash",
+        "luci-proto-wireguard"
+      ]
+    }
+  },
+  "admin/relay/network": {
+    "action": {
+      "type": "alias",
+      "path": "admin/relay/settings"
+    }
+  },
+  "admin/relay/upgrade": {
+    "action": {
+      "type": "alias",
+      "path": "admin/relay/settings"
+    }
+  }
+}

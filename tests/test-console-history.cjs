@@ -6,7 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const source = fs.readFileSync(path.resolve(__dirname,
-  '../packages/luci-theme-airrelay/root/usr/libexec/airrelay-traffic'), 'utf8');
+  '../packages/luci-theme-relay/root/usr/libexec/relay-traffic'), 'utf8');
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'airrelay-history-'));
 try {
   fs.mkdirSync(path.join(dir, 'store'));
@@ -15,7 +15,7 @@ try {
   fs.writeFileSync(path.join(dir, 'rx'), '10000\n');
   fs.writeFileSync(path.join(dir, 'tx'), '20000\n');
   // Exercise the actual shell collector for one iteration with fixture counters.
-  const script = source.replace('store=/tmp/airrelay-traffic', `store=${dir}/store`)
+  const script = source.replace('store=/tmp/relay-traffic', `store=${dir}/store`)
     .replace('/proc/uptime', `${dir}/uptime`)
     .replace('/sys/class/net/br-lan/statistics/rx_bytes', `${dir}/rx`)
     .replace('/sys/class/net/br-lan/statistics/tx_bytes', `${dir}/tx`)

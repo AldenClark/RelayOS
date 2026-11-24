@@ -28,8 +28,8 @@ case "$1" in
         done
         ;;
     install)
-        mkdir -p package/feeds/relayos/luci-theme-airrelay
-        touch package/feeds/relayos/luci-theme-airrelay/Makefile
+        mkdir -p package/feeds/relayos/luci-theme-relay
+        touch package/feeds/relayos/luci-theme-relay/Makefile
         ;;
     *) exit 1 ;;
 esac

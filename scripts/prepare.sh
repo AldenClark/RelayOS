@@ -27,8 +27,11 @@ for feed in packages luci; do
     expected="$(awk -v f="$feed" '$2 == f { split($3,a,/\^/); print a[2] }' feeds.conf)"
     [[ "$expected" =~ ^[0-9a-f]{40}$ && "$(git -C "feeds/$feed" rev-parse HEAD)" == "$expected" ]] || die "Feed revision mismatch: $feed"
 done
+# Register optional dependency metadata referenced by upstream base package Makefiles.
+# Installing a feed definition is not selecting a package for the firmware.
+./scripts/feeds install -p packages libev bluez-utils libpam libtirpc liblzma libzstd libnetsnmp-nossl
 ./scripts/feeds install -p luci luci-mod-admin-full luci-proto-wireguard
-./scripts/feeds install -p relayos luci-theme-airrelay
-[[ -e package/feeds/relayos/luci-theme-airrelay/Makefile ]] || die "RelayOS feed package not installed"
+./scripts/feeds install -p relayos luci-theme-relay
+[[ -e package/feeds/relayos/luci-theme-relay/Makefile ]] || die "RelayOS feed package not installed"
 require_source
 printf 'Prepared %s at %s (%s)\n' "$device" "$ow" "$source_sha"
