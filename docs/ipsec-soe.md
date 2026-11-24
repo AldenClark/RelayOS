@@ -11,9 +11,11 @@ legacy starter/stroke, or iptables updown plugin is selected.
 
 The first-boot IPsec configuration contains no connection or credential.
 Its global enable flag is 0 and automatic strongSwan route installation
-is disabled. Settings -> IPsec can start/stop the native swanctl service
-and display readiness, loaded connection definitions and Crypto API driver
-registration. It does not edit secrets, peers, firewall rules or routes.
+is disabled. Settings -> IPsec provides a global switch, multiple peers with
+individual switches, basic addressing/PSK settings and advanced proposals.
+Save & Apply provisions native swanctl, per-peer XFRM addressing, explicit
+protected routes and the IPsec firewall zone. See
+[IPsec management](ipsec-management.md) for the complete lifecycle contract.
 Manual control fails closed when AirRoute Agent owns the node or ownership
 cannot be determined. Credential and runtime configuration directories are
 root-only.
@@ -46,12 +48,15 @@ exhaustion, and configure matching proposals on the first-hop peer.
 `hw_offload = no` leaves the normal kernel Crypto API selection intact;
 it does not disable EIP93. It is not a substitute for hardware counters.
 
-## Manual provisioning (development)
+## Provisioning and remote-peer requirements
 
-Use SSH or the future Agent to provision the upstream swanctl configuration
-in /etc/config/ipsec or /etc/swanctl/conf.d. Use only one source for a
-connection name. The native /etc/init.d/swanctl script loads the configuration.
-Do not place a real key in this repository.
+Use Settings -> IPsec for supported manual peers. The product configuration
+is stored in /etc/config/relay_ipsec; the backend generates owned native
+sections in /etc/config/ipsec, network and firewall. The native
+/etc/init.d/swanctl script loads the configuration. Do not independently edit
+generated sections or place a real key in this repository. Existing unmanaged
+IPsec configurations must be reviewed before adopting the editor; they are
+not silently overwritten or migrated.
 
 For an IPv4 route-based exit, the first-hop peer and the RelayOS node
 must agree on authenticated identities, ESP/IKE proposals, traffic selectors
@@ -60,22 +65,23 @@ local node, set child if_id_in and if_id_out to the matching local ID, and
 create the interface with the native netifd xfrm protocol (ifid, tunlink,
 mtu). Route only the peer's unique assigned prefixes via that interface;
 never install a remote 0.0.0.0/0 default route on the exit node.
-Associate the XFRM interface with the existing tunnel firewall zone, with
+Associate the XFRM address alias with the dedicated IPsec firewall zone, with
 only tunnel-to-uplink forwarding/NAT, and keep unencrypted uplink traffic
-out of this trusted zone. Permit IKE UDP 500/4500 only for intended
-first-hop peers when inbound listening is required. For NATed edge nodes,
-prefer initiating toward the public first hop with NAT-T. Do not open
-management ports in the tunnel or indiscriminately accept UDP/ESP on the
-physical network. Before enabling service, verify routes and firewall
+out of this trusted zone. The editor restricts IKE UDP 500/4500 and ESP to
+literal endpoint IPv4 addresses when possible. DNS endpoints require a broader
+uplink-zone rule because fw4 cannot use hostnames as source-IP filters; see the
+explicit authentication and source-filter tradeoff in
+[IPsec management](ipsec-management.md). For NATed edge nodes, prefer initiating
+toward the public first hop with NAT-T. Management ports remain closed from
+the IPsec zone. Before enabling service, verify routes and firewall
 rules and ensure protected peer prefixes cannot fall back to plaintext
 uplink routing on tunnel failure.
 
-Keep ipsec.globals.rtinstall_enabled=0 for the RelayOS exit role. The web
-switch changes only ipsec.globals.enabled and starts/stops swanctl.
-An empty configuration may start the IKE daemon but establishes no SA.
-The interface and policy lifecycle must be provisioned and revoked together.
-This release does not implement a complete browser peer editor or automatic
-first-hop provisioning.
+Keep ipsec.globals.rtinstall_enabled=0 for the RelayOS exit role. An enabled
+but empty configuration establishes no SA. The editor coordinates the
+interface, route, firewall and policy lifecycle, retaining unreachable route
+guards for disabled configured peers. It does not provision the first-hop
+server, and successful local configuration is not a successful handshake.
 
 ## SOE: staged experimental port, not a supported build feature
 

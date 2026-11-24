@@ -58,7 +58,15 @@ The two supported devices are:
 
 The Nokia UBI boards do not enable the SoC PCIe controllers. Disable the PCI bus and device-specific PCIe PHY in the native kernel fragments; keep Ethernet PCS, PHY, DSA, NPU, RNG, and UBI/FIT recovery. Disable MPTCP and disk swap in the top-level kernel options and remove BusyBox swap tools and SMB mount support. Preserve SSH diagnostics and recovery tools. Both SoCs reserve 60 MiB in the DTS (ATF 2, NPU 10, QDMA0 32, QDMA1 16 MiB); do not alter this layout without hardware and DMA address/buffer testing. Keep debugfs and upstream data-plane settings for qualification. Firmware size and idle-memory gains require actual measurements.
 
-IPsec is installed but not started by default. The Settings page can enable or disable the native IKE service without creating peers, opening firewall ports or changing routes. See [IPsec/SOE qualification](docs/ipsec-soe.md) for provisioning boundaries, EIP93 algorithm support, and why the experimental EN7581 SOE patch stack is not in the default firmware.
+IPsec is installed but not started by default. Settings provides one global
+enable switch and multiple independently enabled IKEv2/PSK peers, with endpoint,
+identity, tunnel address, remote subnet and advanced proposal settings. Changes
+take effect together through **Save & Apply**, not separate start/stop buttons.
+The backend provisions native swanctl, per-peer XFRM interfaces and scoped
+network/firewall configuration without applying pending WireGuard/LAN edits.
+See [IPsec management](docs/ipsec-management.md) for the configuration contract,
+failure behavior and verification boundaries, and [IPsec/SOE qualification](docs/ipsec-soe.md)
+for EIP93 algorithm support and why experimental SOE patches remain excluded.
 
 ## RelayOS Console (default web UI)
 

@@ -406,3 +406,186 @@ msgstr "EIP-93 驱动尚未注册。"
 
 msgid "Configure peers, credentials and XFRM routes through SSH or AirRoute Agent. Enabling the service does not open firewall ports or change routes."
 msgstr "通过 SSH 或 AirRoute Agent 配置对端、凭据和 XFRM 路由。开启服务不会自动开放防火墙端口或修改路由。"
+
+msgid "IPsec settings changed elsewhere. Discard this draft and review the current settings."
+msgstr "IPsec 配置已被其他操作修改。请放弃当前草稿，重新查看最新配置。"
+
+msgid "Another IPsec operation is in progress. Try again shortly."
+msgstr "另一个 IPsec 操作正在进行，请稍后重试。"
+
+msgid "IPsec settings conflict with an existing route, interface or configuration. Review the settings."
+msgstr "IPsec 配置与现有路由、接口或其他配置冲突，请检查设置。"
+
+msgid "IKE identities conflict with another peer. Check local and remote identities."
+msgstr "IKE 身份与其他对端冲突，请检查本地和远端身份。"
+
+msgid "A new peer requires a preshared key."
+msgstr "新增对端必须填写预共享密钥。"
+
+msgid "Other network or firewall changes are pending. Apply or discard those changes first."
+msgstr "网络或防火墙还有未应用的修改，请先应用或放弃这些修改。"
+
+msgid "Existing unmanaged IPsec configuration must be reviewed before using this editor."
+msgstr "检测到不由此页面管理的 IPsec 配置，请先检查现有配置再使用此编辑器。"
+
+msgid "IPsec components are unavailable. Check the installed firmware packages."
+msgstr "IPsec 组件不可用，请检查固件中的相关软件包。"
+
+msgid "IPsec settings were rejected. Check the peer parameters and address ranges."
+msgstr "IPsec 配置未通过校验，请检查对端参数和地址范围。"
+
+msgid "IPsec application and rollback failed. Inspect the device through SSH before making further changes."
+msgstr "IPsec 配置应用和回滚均失败，请先通过 SSH 检查设备，再进行其他修改。"
+
+msgid "IPsec settings could not be applied. Review the service status and system log; your draft has been kept."
+msgstr "IPsec 配置应用失败，请检查服务状态和系统日志；当前草稿已保留。"
+
+msgid "Peer identifiers must be unique. Reload the editor."
+msgstr "对端标识必须唯一，请重新加载编辑器。"
+
+msgid "Give every peer a name of 1 to 64 UTF-8 bytes, without control characters."
+msgstr "请为每个对端填写名称，长度为 1～64 个 UTF-8 字节，且不能包含控制字符。"
+
+msgid "Enter a valid peer IPv4 address or DNS hostname, without a port."
+msgstr "请输入有效的对端 IPv4 地址或域名，不要附带端口。"
+
+msgid "IKE identities must start with a letter or digit (optionally after @) and contain only letters, digits, dots, @, underscores and hyphens."
+msgstr "IKE 身份须以字母或数字开头（前面可加 @），且只能包含字母、数字、点、@、下划线和连字符。"
+
+msgid "Each peer must have a different remote IKE identity."
+msgstr "每个对端必须使用不同的远端 IKE 身份。"
+
+msgid "Enter a local tunnel IPv4 address with a /32 prefix."
+msgstr "请输入前缀为 /32 的本地隧道 IPv4 地址。"
+
+msgid "Local tunnel IPv4 addresses must be different for each peer."
+msgstr "不同对端的本地隧道 IPv4 地址不能相同。"
+
+msgid "Enter from 1 to 32 remote IPv4 subnets."
+msgstr "请输入 1～32 个远端 IPv4 网段。"
+
+msgid "Enter valid IPv4 CIDRs; a default route (/0) is not allowed."
+msgstr "请输入有效的 IPv4 CIDR；不允许配置默认路由（/0）。"
+
+msgid "Remote subnets must not contain unspecified, loopback, link-local or multicast addresses."
+msgstr "远端网段不能包含未指定、环回、链路本地或组播地址。"
+
+msgid "Remote IPv4 subnets must not overlap, including between peers."
+msgstr "远端 IPv4 网段不能重叠，不同对端之间也不能重叠。"
+
+msgid "Enter a preshared key of 16 to 128 UTF-8 bytes."
+msgstr "请输入长度为 16～128 个 UTF-8 字节的预共享密钥。"
+
+msgid "Enter a preshared key of 16 to 128 UTF-8 bytes without control characters."
+msgstr "请输入长度为 16～128 个 UTF-8 字节且不含控制字符的预共享密钥。"
+
+msgid "Select a supported IKE and ESP proposal."
+msgstr "请选择受支持的 IKE 和 ESP 算法组合。"
+
+msgid "DPD interval must be an integer from 10 to 3600 seconds."
+msgstr "DPD 检测间隔必须为 10～3600 秒的整数。"
+
+msgid "MTU must be an integer from 576 to 1500."
+msgstr "MTU 必须为 576～1500 的整数。"
+
+msgid "A local tunnel address must not equal an IKE endpoint address."
+msgstr "本地隧道地址不能与 IKE 对端地址相同。"
+
+msgid "A remote subnet must not include a local tunnel address."
+msgstr "远端网段不能包含本地隧道地址。"
+
+msgid "A remote subnet must not include an IKE endpoint address."
+msgstr "远端网段不能包含 IKE 对端地址。"
+
+msgid "IPsec settings applied. A ready IKE service does not by itself mean every tunnel is connected."
+msgstr "IPsec 配置已应用。IKE 服务就绪不代表所有隧道都已连接。"
+
+msgid "Connecting"
+msgstr "连接中"
+
+msgid "Not connected"
+msgstr "未连接"
+
+msgid "Not yet applied"
+msgstr "尚未应用"
+
+msgid "Discard changes"
+msgstr "放弃修改"
+
+msgid "Refresh status"
+msgstr "刷新状态"
+
+msgid "New peer"
+msgstr "新对端"
+
+msgid "Remove peer"
+msgstr "删除对端"
+
+msgid "Enable peer"
+msgstr "启用对端"
+
+msgid "IPv4 address or DNS hostname of the remote IKE peer."
+msgstr "远端 IKE 对端的 IPv4 地址或域名。"
+
+msgid "Local IKE identity"
+msgstr "本地 IKE 身份"
+
+msgid "Remote IKE identity"
+msgstr "远端 IKE 身份"
+
+msgid "A key is stored. Leave this field blank to keep it; enter a new key to replace it."
+msgstr "已保存密钥。留空可保留原密钥，填写新密钥将替换原密钥。"
+
+msgid "Required for a new peer. Use a random key of 16 to 128 UTF-8 bytes."
+msgstr "新增对端必填。请使用长度为 16～128 个 UTF-8 字节的随机密钥。"
+
+msgid "Local tunnel IPv4 address"
+msgstr "本地隧道 IPv4 地址"
+
+msgid "Use a different /32 address for every peer."
+msgstr "请为每个对端使用不同的 /32 地址。"
+
+msgid "Remote IPv4 subnets"
+msgstr "远端 IPv4 网段"
+
+msgid "One IPv4 CIDR per line. No default route, overlapping peer routes or WireGuard routes."
+msgstr "每行一个 IPv4 CIDR。不允许默认路由，也不能与其他对端或 WireGuard 的路由重叠。"
+
+msgid "Advanced parameters"
+msgstr "高级参数"
+
+msgid "IKE proposal"
+msgstr "IKE 算法组合"
+
+msgid "ESP proposal"
+msgstr "ESP 算法组合"
+
+msgid "DPD interval (seconds)"
+msgstr "DPD 检测间隔（秒）"
+
+msgid "Tunnel MTU"
+msgstr "隧道 MTU"
+
+msgid "NAT traversal is automatic. AES-CBC/SHA-256 is the EIP-93 test profile; AES-GCM may use CPU crypto."
+msgstr "自动处理 NAT 穿越。AES-CBC/SHA-256 用于 EIP-93 性能测试；AES-GCM 可能使用 CPU 加密。"
+
+msgid "Changes are applied only when you save. Disabled peers keep protected routes; removing a peer removes its routes."
+msgstr "修改仅在保存时生效。关闭对端会保留受保护的路由；删除对端则会移除其路由。"
+
+msgid "No IPsec peers configured. Add a peer to create a tunnel."
+msgstr "尚未配置 IPsec 对端。添加对端即可创建隧道。"
+
+msgid "Applying…"
+msgstr "正在应用…"
+
+msgid "Unsaved changes"
+msgstr "有未保存的修改"
+
+msgid "IPsec settings are read-only for this session."
+msgstr "当前会话仅可查看 IPsec 设置。"
+
+msgid "At most 256 remote IPv4 subnets are allowed across all peers, including disabled peers."
+msgstr "所有对端的远端 IPv4 子网合计不得超过 256 个，已关闭的对端也计入总数。"
+
+msgid "Editor resource limits: 64 peers, 32 subnets per peer, 256 subnets total including disabled peers; not protocol or hardware limits."
+msgstr "编辑器资源上限：64 个对端、每对端 32 个子网、总计 256 个子网（含已关闭的对端）；这不是协议或硬件限制。"

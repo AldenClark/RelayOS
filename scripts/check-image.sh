@@ -42,6 +42,7 @@ for name in relay-ipsec \
             kmod-crypto-gcm \
             xfrm \
             ip-full \
+            ucode ucode-mod-fs ucode-mod-uci coreutils-timeout \
             kmod-wireguard wireguard-tools firewall4 nftables-json kmod-nft-offload fitblk uboot-envtools luci-mod-admin-full \
             luci-proto-wireguard luci-lib-uqr resolveip \
             luci-theme-relay luci-i18n-relay-zh-cn \

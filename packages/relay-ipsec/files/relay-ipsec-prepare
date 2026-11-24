@@ -7,8 +7,8 @@ start() {
     umask 077
     mkdir -p /var/ipsec /var/swanctl /etc/swanctl || return 1
     chmod 700 /var/ipsec /var/swanctl /etc/swanctl || return 1
-    [ -f /etc/config/ipsec ] || return 1
-    chmod 600 /etc/config/ipsec || return 1
+    [ -f /etc/config/ipsec ] && [ -f /etc/config/relay_ipsec ] || return 1
+    chmod 600 /etc/config/ipsec /etc/config/relay_ipsec || return 1
 }
 
 boot() {

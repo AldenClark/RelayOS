@@ -26,7 +26,7 @@ const dependencies = {
   baseclass: BaseClass,
   view: BaseClass,
   rpc: { declare: () => () => Promise.resolve({}) },
-  form: {}, uci: {}, poll: {}, fs: {}, ui: {},
+  form: {}, uci: {}, poll: {}, fs: {}, ui: {}, request: {},
   Date: { now: () => now }
 };
 

@@ -1,160 +1,250 @@
 #!/usr/bin/env bash
-# Exercise the production shell helper in a disposable filesystem fixture.
+# Exercise copies of the production shell bridge, rpcd plugin and boot helper.
+# No real ucode worker, UCI configuration, init service, network or device is used.
+# Bash, Node and flock are already used by the default console CI tests.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd -P)"
-tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
-export MOCK_STATE="$tmp/state" MOCK_START_FAIL=0 MOCK_STOP_FAIL=0
-export MOCK_AGENT='{"airroute-agent":{"enabled":false,"running":false}}'
-mkdir -p "$tmp/bin" "$tmp/init" "$tmp/etc/config" "$MOCK_STATE"
-touch "$tmp/etc/config/ipsec"
-printf '0\n' > "$MOCK_STATE/enabled"
-printf '0\n' > "$MOCK_STATE/routes"
-touch "$MOCK_STATE/pending"
-printf 'driver : authenc(hmac(sha256-eip93),cbc(aes-eip93))\n' > "$tmp/crypto"
-python3 - "$root/packages/relay-ipsec/files" "$tmp" <<'PY'
-import pathlib, sys
-src, target = map(pathlib.Path, sys.argv[1:])
-mapping = {
-    "/etc/init.d/swanctl": str(target/"init/swanctl"),
-    "/usr/sbin/swanctl": str(target/"bin/swanctl"),
-    "/etc/init.d/relay-ipsec-prepare": str(target/"init/relay-ipsec-prepare"),
-    "/etc/init.d/airroute-agent": str(target/"init/airroute-agent"),
-    "/etc/config/ipsec": str(target/"etc/config/ipsec"),
-    "/etc/swanctl": str(target/"etc/swanctl"),
-    "/var/ipsec": str(target/"var/ipsec"),
-    "/var/swanctl": str(target/"var/swanctl"),
-    "/proc/crypto": str(target/"crypto"),
-    "/var/lock": str(target/"var/lock"),
-    "PATH=/usr/sbin:/usr/bin:/sbin:/bin": "PATH="+str(target/"bin")+":/usr/bin:/bin",
+fixture="$(mktemp -d -t relay-ipsec-control.XXXXXXXX)"
+trap 'rm -rf -- "$fixture"' EXIT
+export RELAY_IPSEC_TEST_STATE="$fixture/state"
+export RELAY_IPSEC_TEST_OUTCOME=ok RELAY_IPSEC_TEST_UCI_FAIL=none
+
+node - "$root" "$fixture" <<'NODE'
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const [ root, fixture ] = process.argv.slice(2);
+for (const dir of [ 'bin', 'state', 'share', 'etc/config', 'var/lock' ])
+  fs.mkdirSync(path.join(fixture, dir), { recursive: true });
+const files = path.join(root, 'packages/relay-ipsec/files');
+function copy(source, destination, replacements) {
+  let contents = fs.readFileSync(path.join(files, source), 'utf8');
+  for (const [ before, after ] of replacements) {
+    assert.ok(contents.includes(before), 'Fixture path replacement must match production: ' + before);
+    contents = contents.replaceAll(before, after);
+  }
+  fs.writeFileSync(path.join(fixture, destination), contents, { mode: 0o755 });
 }
-def copy(name, out, guard=False):
-    s=(src/name).read_text()
-    for old,new in mapping.items():
-        s=s.replace(old,new)
-    if guard:
-        s=s.replace("#!/bin/sh /etc/rc.common", "#!/bin/sh", 1)
-        s+='\ncase "$1" in start) start ;; boot) boot ;; *) exit 2 ;; esac\n'
-    out.write_text(s)
-    out.chmod(0o755)
-copy("relay-ipsec", target/"control")
-copy("relay-ipsec-prepare", target/"init/relay-ipsec-prepare", True)
-PY
-cat > "$tmp/bin/uci" <<'EOF'
-#!/bin/sh
-[ "$1" != -q ] || shift
-case "$1 $2" in
-    "get ipsec.globals") echo globals ;;
-    "get ipsec.globals.enabled") cat "$MOCK_STATE/enabled" ;;
-    "get ipsec.globals.rtinstall_enabled") cat "$MOCK_STATE/routes" ;;
-    "get ipsec.@ipsec[0]") exit 1 ;;
-    "changes ipsec") cat "$MOCK_STATE/pending" ;;
-    "set ipsec.globals.enabled=0"|"set ipsec.globals.enabled=1")
-        printf '%s\n' "${2##*=}" > "$MOCK_STATE/enabled" ;;
-    "commit ipsec"|"revert ipsec.globals.enabled") : ;;
-    *) exit 2 ;;
-esac
-EOF
-cat > "$tmp/bin/swanctl" <<'EOF'
-#!/bin/sh
-[ -f "$MOCK_STATE/running" ] || exit 1
-case "$1" in
-    --stats) echo ready ;;
-    --list-conns) [ ! -f "$MOCK_STATE/loaded" ] || echo 'test: IKEv2' ;;
-    *) exit 2 ;;
-esac
-EOF
-cat > "$tmp/init/swanctl" <<'EOF'
-#!/bin/sh
-case "$1" in
-    enable) : ;;
-    start)
-        [ "$MOCK_START_FAIL" = 0 ] || exit 1
-        [ "$(cat "$MOCK_STATE/enabled")" = 1 ] || exit 1
-        touch "$MOCK_STATE/running" ;;
-    stop)
-        [ "$MOCK_STOP_FAIL" = 0 ] || exit 1
-        rm -f "$MOCK_STATE/running" "$MOCK_STATE/loaded" ;;
-    *) exit 2 ;;
-esac
-EOF
-cat > "$tmp/bin/pidof" <<'EOF'
-#!/bin/sh
-[ "$1" = charon ] && [ -f "$MOCK_STATE/running" ]
-EOF
-cat > "$tmp/bin/sleep" <<'EOF'
-#!/bin/sh
-exit 0
-EOF
-cat > "$tmp/bin/ubus" <<'EOF'
-#!/bin/sh
-printf '%s\n' "$MOCK_AGENT"
-EOF
-cat > "$tmp/bin/jsonfilter" <<'EOF'
-#!/usr/bin/env python3
-import json, sys
-try:
-    value=json.load(sys.stdin)["airroute-agent"][sys.argv[2].rsplit(".",1)[1]]
-    assert type(value) is bool
-    print(json.dumps(value))
-except (ValueError, KeyError, AssertionError, IndexError):
-    sys.exit(1)
-EOF
-chmod +x "$tmp/bin/"* "$tmp/init/swanctl"
-check() {
-    local expected="$1" action="${2:-status}"
-    "$tmp/control" "$action" | python3 -c 'import json,sys; assert json.load(sys.stdin)==json.loads(sys.argv[1])' "$expected"
+copy('relay-ipsec', 'control', [
+  [ 'PATH=/usr/sbin:/usr/bin:/sbin:/bin', 'PATH=' + fixture + '/bin:/usr/bin:/bin' ],
+  [ '/usr/bin/ucode', fixture + '/bin/ucode' ],
+  [ '/usr/share/relay-ipsec/worker.uc', fixture + '/share/worker.uc' ],
+  [ '/var/lock', fixture + '/var/lock' ]
+]);
+copy('relay.ipsec', 'rpcd-plugin', [ [ '/usr/libexec/relay-ipsec', fixture + '/control' ] ]);
+copy('relay-ipsec-prepare', 'prepare', [
+  [ '#!/bin/sh /etc/rc.common', '#!/bin/sh' ],
+  [ '/etc/config/ipsec', fixture + '/etc/config/ipsec' ],
+  [ '/etc/config/relay_ipsec', fixture + '/etc/config/relay_ipsec' ],
+  [ '/etc/swanctl', fixture + '/etc/swanctl' ],
+  [ '/var/swanctl', fixture + '/var/swanctl' ],
+  [ '/var/ipsec', fixture + '/var/ipsec' ]
+]);
+// rc.common would dispatch these functions on the device. Dispatch only the
+// two intended functions in this private test copy, without sourcing rc.common.
+fs.appendFileSync(path.join(fixture, 'prepare'), '\n[ "$#" -eq 1 ] || exit 2\ncase "$1" in start) start ;; boot) boot ;; *) exit 2 ;; esac\n');
+assert.match(fs.readFileSync(path.join(files, 'relay-ipsec-prepare'), 'utf8'), /^START=89$/m);
+for (const name of [ 'ipsec', 'relay_ipsec' ]) {
+  const content = fs.readFileSync(path.join(root, 'overlay/etc/config', name), 'utf8');
+  assert.match(content, /option enabled '0'/, 'Fresh images must default to disabled');
+  fs.writeFileSync(path.join(fixture, 'etc/config', name), content);
+  fs.chmodSync(path.join(fixture, 'etc/config', name), 0o666);
 }
-reject() {
-    if "$tmp/control" "$@" >"$tmp/stdout" 2>"$tmp/stderr"; then
-        echo "Unexpected success: $*" >&2; exit 1
+fs.writeFileSync(path.join(fixture, 'share/worker.uc'), '// No real worker runs in this shell test.\n');
+for (const name of [ 'calls', 'uci-calls' ]) fs.writeFileSync(path.join(fixture, 'state', name), '');
+// Deliberate whitespace, UTF-8 and shell metacharacters must arrive byte-for-byte
+// on stdin, never be interpolated, and never appear in argv or diagnostics.
+fs.writeFileSync(path.join(fixture, 'input'), '  ' + JSON.stringify({ config: {
+  revision: 'fixture-r1', enabled: false, peers: [{ psk: 'synthetic-key-密钥-"-$()-;\\' }]
+} }, null, 2) + '\n\n');
+function stub(name, lines) {
+  fs.writeFileSync(path.join(fixture, 'bin', name), lines.join('\n') + '\n', { mode: 0o755 });
+}
+stub('ucode', [
+  '#!/bin/sh', 'set -eu',
+  '[ "$#" -eq 2 ] || exit 91',
+  'printf "%s\\n" "$@" > "$RELAY_IPSEC_TEST_STATE/argv"',
+  'printf "called\\n" >> "$RELAY_IPSEC_TEST_STATE/calls"',
+  'umask > "$RELAY_IPSEC_TEST_STATE/umask"',
+  'cat > "$RELAY_IPSEC_TEST_STATE/stdin"',
+  'printf "synthetic-private-key diagnostic must not escape\\n" >&2',
+  'case "$RELAY_IPSEC_TEST_OUTCOME" in',
+  '  ok) printf \'{"ok":true,"action":"%s"}\\n\' "$2" ;;',
+  '  error) printf \'{"ok":false,"error":"invalid_config"}\\n\' ;;',
+  '  exit) exit 17 ;;',
+  '  *) exit 92 ;;',
+  'esac'
+]);
+stub('uci', [
+  '#!/bin/sh', 'set -eu', '[ "$1" != -q ] || shift',
+  'printf "%s\\n" "$*" >> "$RELAY_IPSEC_TEST_STATE/uci-calls"',
+  '[ "$1" != "$RELAY_IPSEC_TEST_UCI_FAIL" ] || exit 1',
+  'case "$1 $2" in',
+  '  "get ipsec.globals.enabled") [ -f "$RELAY_IPSEC_TEST_STATE/enabled" ] || exit 1; cat "$RELAY_IPSEC_TEST_STATE/enabled" ;;',
+  '  "set ipsec.globals=globals") printf "globals\\n" > "$RELAY_IPSEC_TEST_STATE/globals" ;;',
+  '  "set ipsec.globals.enabled=0") printf "0\\n" > "$RELAY_IPSEC_TEST_STATE/enabled" ;;',
+  '  "set ipsec.globals.rtinstall_enabled=0") printf "0\\n" > "$RELAY_IPSEC_TEST_STATE/routes" ;;',
+  '  "commit ipsec") printf "committed\\n" > "$RELAY_IPSEC_TEST_STATE/committed" ;;',
+  '  *) exit 93 ;;',
+  'esac'
+]);
+NODE
+
+run() {
+    if "$@" < "$fixture/input" > "$fixture/stdout" 2> "$fixture/stderr"; then
+        result=0
+    else
+        result=$?
     fi
 }
-off='{"enabled":false,"ready":false,"loaded":false,"eip93":true,"manual":true}'
-on='{"enabled":true,"ready":true,"loaded":false,"eip93":true,"manual":true}'
-check "$off"
-reject invalid
-reject enable extra
-printf '1\n' > "$MOCK_STATE/routes"
-reject enable
-check "$off"
-printf '0\n' > "$MOCK_STATE/routes"
-printf 'pending change\n' > "$MOCK_STATE/pending"
-reject enable
-: > "$MOCK_STATE/pending"
+calls() { wc -l < "$fixture/state/calls"; }
+assert_json() {
+    [[ "$result" -eq 0 ]]
+    node - "$fixture/stdout" "$1" <<'NODE'
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+assert.deepEqual(JSON.parse(fs.readFileSync(process.argv[2], 'utf8')), JSON.parse(process.argv[3]));
+NODE
+}
+assert_worker() {
+    node - "$fixture" "$1" <<'NODE'
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const [ fixture, action ] = process.argv.slice(2);
+assert.deepEqual(fs.readFileSync(path.join(fixture, 'state/argv'), 'utf8').trim().split('\n'),
+  [ path.join(fixture, 'share/worker.uc'), action ]);
+assert.match(fs.readFileSync(path.join(fixture, 'state/umask'), 'utf8').trim(), /^0*77$/);
+assert.equal(fs.readFileSync(path.join(fixture, 'stderr'), 'utf8'), '', 'Worker stderr must not leak');
+assert.deepEqual(fs.readFileSync(path.join(fixture, 'state/stdin')), fs.readFileSync(path.join(fixture, 'input')));
+NODE
+}
+reject() {
+    local before
+    before="$(calls)"
+    run "$@"
+    [[ "$result" -ne 0 && ! -s "$fixture/stdout" ]]
+    [[ "$(calls)" -eq "$before" ]]
+}
+check_modes() {
+    node - "$fixture" <<'NODE'
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const fixture = process.argv[2];
+for (const name of [ 'etc/config/ipsec', 'etc/config/relay_ipsec' ])
+  assert.equal(fs.statSync(path.join(fixture, name)).mode & 0o777, 0o600, name);
+for (const name of [ 'var/ipsec', 'var/swanctl', 'etc/swanctl' ])
+  assert.equal(fs.statSync(path.join(fixture, name)).mode & 0o777, 0o700, name);
+NODE
+}
 
-check "$on" enable
-# Root-only configuration directories/files, with no peer secrets returned.
-test "$(stat -c '%a' "$tmp/etc/config/ipsec")" = 600
-for dir in "$tmp/etc/swanctl" "$tmp/var/ipsec" "$tmp/var/swanctl"; do
-    test "$(stat -c '%a' "$dir")" = 700
+# Only the fixed bridge actions are accepted. status is a get compatibility alias.
+for action in get status apply; do
+    run "$fixture/control" "$action"
+    expected="$action"
+    [[ "$action" != status ]] || expected=get
+    assert_json "{\"ok\":true,\"action\":\"$expected\"}"
+    assert_worker "$expected"
 done
-touch "$MOCK_STATE/loaded"
-check '{"enabled":true,"ready":true,"loaded":true,"eip93":true,"manual":true}'
-check "$off" disable
-export MOCK_START_FAIL=1
-reject enable
-check "$off"
-export MOCK_START_FAIL=0
+reject "$fixture/control"
+for action in enable disable invalid 'apply;reboot'; do reject "$fixture/control" "$action"; done
+reject "$fixture/control" apply extra
+reject "$fixture/control" get extra
 
-# An Agent with an unknown or managed state must block both mutations.
-touch "$tmp/init/airroute-agent"; chmod +x "$tmp/init/airroute-agent"
-export MOCK_AGENT='{"airroute-agent":{"enabled":true,"running":false}}'
-reject enable
-reject disable
-export MOCK_AGENT='{}'
-reject enable
-export MOCK_AGENT='{"airroute-agent":{"enabled":false,"running":false}}'
-check "$on" enable
-export MOCK_STOP_FAIL=1
-reject disable
-test "$(cat "$MOCK_STATE/enabled")" = 0
-export MOCK_STOP_FAIL=0
-check "$off" disable
-# Lock serializes requests without waiting on an arbitrary user input.
-exec 8>"$tmp/var/lock/relay-ipsec.lock"
+# Errors emitted by the worker remain structured; stderr and abnormal process
+# termination never expose its diagnostic text or synthesize a false success.
+export RELAY_IPSEC_TEST_OUTCOME=error
+run "$fixture/control" apply
+assert_json '{"ok":false,"error":"invalid_config"}'
+assert_worker apply
+export RELAY_IPSEC_TEST_OUTCOME=exit
+run "$fixture/control" apply
+[[ "$result" -eq 17 && ! -s "$fixture/stdout" && ! -s "$fixture/stderr" ]]
+export RELAY_IPSEC_TEST_OUTCOME=ok
+
+# Real flock contention is nonblocking and returns the same safe JSON for reads
+# and writes. Holding fd 8 avoids the bridge's own fd 9.
+before="$(calls)"
+exec 8>"$fixture/var/lock/relay-ipsec.lock"
 flock -n 8
-reject enable
+for action in get status apply; do
+    run "$fixture/control" "$action"
+    assert_json '{"ok":false,"error":"busy"}'
+done
+[[ "$(calls)" -eq "$before" ]]
 flock -u 8
-check "$off"
-echo 'RelayOS IPsec: default off, bounded start/stop, rollback, ownership, route guard, permissions and lock OK'
+exec 8>&-
+run "$fixture/control" get
+assert_json '{"ok":true,"action":"get"}'
+
+# The bridge must safely reject an absent or nonexecutable interpreter and an
+# absent worker. These changes affect only this fixture, not production paths.
+before="$(calls)"
+chmod 644 "$fixture/bin/ucode"
+run "$fixture/control" get
+assert_json '{"ok":false,"error":"unavailable"}'
+chmod 755 "$fixture/bin/ucode"
+mv "$fixture/bin/ucode" "$fixture/bin/ucode.saved"
+run "$fixture/control" apply
+assert_json '{"ok":false,"error":"unavailable"}'
+mv "$fixture/bin/ucode.saved" "$fixture/bin/ucode"
+mv "$fixture/share/worker.uc" "$fixture/share/worker.saved"
+run "$fixture/control" get
+assert_json '{"ok":false,"error":"unavailable"}'
+mv "$fixture/share/worker.saved" "$fixture/share/worker.uc"
+[[ "$(calls)" -eq "$before" ]]
+
+# rpcd advertises a table/object config, not a string or arbitrary shell command.
+run "$fixture/rpcd-plugin" list
+assert_json '{"get":{},"apply":{"config":{}}}'
+for action in get apply; do
+    run "$fixture/rpcd-plugin" call "$action"
+    assert_json "{\"ok\":true,\"action\":\"$action\"}"
+    assert_worker "$action"
+done
+reject "$fixture/rpcd-plugin"
+reject "$fixture/rpcd-plugin" list extra
+reject "$fixture/rpcd-plugin" call
+reject "$fixture/rpcd-plugin" call status
+reject "$fixture/rpcd-plugin" call enable
+reject "$fixture/rpcd-plugin" call invalid
+reject "$fixture/rpcd-plugin" call apply extra
+
+# Boot prepare runs before swanctl and protects private files/directories. start
+# itself must not edit configuration, launch a worker, or change the network.
+before="$(calls)"
+run env "PATH=$fixture/bin:$PATH" "$fixture/prepare" start
+[[ "$result" -eq 0 && ! -s "$fixture/state/uci-calls" ]]
+check_modes
+run env "PATH=$fixture/bin:$PATH" "$fixture/prepare" boot
+[[ "$result" -eq 0 ]]
+[[ "$(<"$fixture/state/globals")" == globals ]]
+[[ "$(<"$fixture/state/enabled")" == 0 && "$(<"$fixture/state/routes")" == 0 ]]
+[[ "$(<"$fixture/state/committed")" == committed ]]
+check_modes
+
+# An explicit saved enable flag survives boot; only an absent/empty flag falls
+# back to disabled. No unconditional rewrite or implicit daemon start is allowed.
+for enabled in 1 0; do
+    printf '%s\n' "$enabled" > "$fixture/state/enabled"
+    : > "$fixture/state/uci-calls"
+    run env "PATH=$fixture/bin:$PATH" "$fixture/prepare" boot
+    [[ "$result" -eq 0 && "$(<"$fixture/state/enabled")" == "$enabled" ]]
+    [[ "$(<"$fixture/state/uci-calls")" == 'get ipsec.globals.enabled' ]]
+done
+: > "$fixture/state/enabled"
+export RELAY_IPSEC_TEST_UCI_FAIL=commit
+run env "PATH=$fixture/bin:$PATH" "$fixture/prepare" boot
+[[ "$result" -ne 0 ]]
+export RELAY_IPSEC_TEST_UCI_FAIL=none
+
+for name in ipsec relay_ipsec; do
+    : > "$fixture/state/uci-calls"
+    mv "$fixture/etc/config/$name" "$fixture/etc/config/$name.saved"
+    run env "PATH=$fixture/bin:$PATH" "$fixture/prepare" boot
+    [[ "$result" -ne 0 && ! -s "$fixture/state/uci-calls" ]]
+    mv "$fixture/etc/config/$name.saved" "$fixture/etc/config/$name"
+done
+[[ "$(calls)" -eq "$before" ]]
+printf '%s\n' 'RelayOS IPsec shell: fixed get/status/apply, stdin, typed rpcd plugin, lock, dependency failures, stderr redaction, private modes and default-off boot OK'
