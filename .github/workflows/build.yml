@@ -48,6 +48,9 @@ jobs:
             xz-utils zlib1g-dev zstd device-tree-compiler u-boot-tools
           df -h .
 
+      - name: Test official-only source policy (offline)
+        run: bash tests/test-upstream-source.sh
+
       - name: Prepare locked OpenWrt and product feed
         run: scripts/prepare.sh "${{ matrix.device }}"
 
@@ -123,6 +126,7 @@ jobs:
               test -s "relayos-$device.$suffix"
             done
             grep -Fx "product_commit=$GITHUB_SHA" "relayos-$device.source.buildinfo"
+            grep -Fx "openwrt_source=https://github.com/openwrt/openwrt.git" "relayos-$device.source.buildinfo"
             sha256sum -c "RELAYOS-$device-SHA256SUMS"
           done
           diff <(grep '^openwrt_commit=' relayos-md.source.buildinfo) \
@@ -140,5 +144,5 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "RelayOS (MD/MF) #${{ github.run_number }}" \
-            --notes "Nokia XG-040G-MD (AN7581) and XG-040G-MF (AN7583), UBI boot layout ONLY. Kernel WireGuard, copper Ethernet, no PON. Source: $GITHUB_SHA; OpenWrt: $upstream. Hardware acceptance is separate from build verification." \
+            --notes "Nokia XG-040G-MD (AN7581) and XG-040G-MF (AN7583), UBI boot layout ONLY. Kernel WireGuard, copper Ethernet, no PON. Source: $GITHUB_SHA; OpenWrt: https://github.com/openwrt/openwrt/commit/$upstream. Hardware acceptance is separate from build verification." \
             --prerelease

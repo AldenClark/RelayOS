@@ -146,8 +146,9 @@ roll back bad changes if a tunnel cannot be established.
 
 ## Independent repository architecture
 
-RelayOS is the private product repository. The public AldenClark/openwrt
-fork is the upstream mirror, not the home of the product code.
+RelayOS is the standalone private product repository. Builds fetch the
+exact locked commit directly from the official `openwrt/openwrt` repository.
+No private or personal OpenWrt fork, mirror or synchronization is required.
 
 - `upstream.lock`: exact reviewed OpenWrt commit; only the lock is advanced.
   The current candidate is [64c777f](https://github.com/openwrt/openwrt/commit/64c777f3af8ad1503c257afe686e44200de832c7),
@@ -174,15 +175,14 @@ and fresh/default hostnames use RelayOS. Do not rename the internal
 `luci-theme-airrelay` package or the future `airroute-agent` init service
 without an explicit migration plan.
 
-Upstream source is fetched from the mirror, with the official repository as
-an exact-SHA fallback while the legacy fork is still being retained. A source
-checkout must match the lock. The mirror can follow upstream independently;
-a new lock and feed changes are reviewed and validated before release. The
-first migrated build must pass both devices' full build and hardware
-acceptance before replacing the previous working baseline or resetting the
-old fork. Disable Actions in the mirror before restoring its upstream
-workflow files to avoid inherited CI. Keep existing releases and record the
-legacy product commit for rollback.
+The official repository URL and full commit SHA live in `upstream.lock`.
+A fresh build fetches only that commit, checks out detached HEAD, and verifies
+both origin and SHA. There is no fork fallback or floating branch. To adopt a
+new upstream version, review and change the lock; validate both devices and
+review feed compatibility before releasing. The historical fork is only a
+rollback reference and must remain untouched until migrated firmware builds
+and hardware acceptance succeed. Its future reset or archival is independent
+of RelayOS builds. Existing historical releases should be retained.
 
 ## Reproducible build
 
@@ -214,11 +214,14 @@ The manual-only GitHub Actions workflow **RelayOS (MD / MF)** offers:
   their package manifests, final kernel configs, embedded FIT device trees
   and sysupgrade compatibility metadata. Publish only when both pass.
 
+Both modes first run an offline regression test for the official-only source
+policy, including failure handling and exact commit checkout.
+
 Select **Actions → RelayOS (MD / MF) → Run workflow**, branch main.
 Outputs are named `relayos-airoha-...-sysupgrade.itb` and
 `relayos-airoha-...-initramfs-recovery.itb`; the unique prerelease includes
 per-device checksums, manifest, effective OpenWrt/kernel configuration,
-locked feeds and source provenance. Only UBI images are published. No
+locked feeds and source provenance (official source URL and exact commit). Only UBI images are published. No
 workflow flashes hardware or modifies bootloaders. Private repository
 runners and artifact storage may incur account usage charges.
 

@@ -1,4 +1,3 @@
 # Reviewed OpenWrt development snapshot; advance only by an intentional lock change.
-source=https://github.com/AldenClark/openwrt.git
-fallback=https://github.com/openwrt/openwrt.git
+source=https://github.com/openwrt/openwrt.git
 commit=64c777f3af8ad1503c257afe686e44200de832c7

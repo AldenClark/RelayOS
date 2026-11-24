@@ -18,8 +18,8 @@ cp "${kconfigs[0]}" "$artifact_dir/relayos-$device.kernel.config"
 cp "$product_root/feeds.conf" "$artifact_dir/relayos-$device.feeds.buildinfo"
 {
     printf 'product_commit=%s\n' "$(git -C "$product_root" rev-parse HEAD)"
+    printf 'openwrt_source=%s\n' "$source_url"
     printf 'openwrt_commit=%s\n' "$source_sha"
-    printf 'legacy_source_commit=71c85225fa124d9d7510f561800bd76e27459c88\n'
     printf 'device=%s\nboard=%s\n' "$device" "$board"
     printf 'kernel=%s\n' "$(awk '$1 ~ /^LINUX_VERSION-/ {print $1,$3}' "$ow/target/linux/generic/kernel-6.18")"
     printf 'product_patch_sha256=%s\n' "$(sha256sum "$product_root/patches/001-disable-nokia-pon-pcs.patch" | cut -d' ' -f1)"

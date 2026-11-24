@@ -23,10 +23,16 @@ lock_value() {
     [[ -n "$value" && "$value" != *$'\n'* ]] || die "Invalid lock entry $key"
     printf '%s\n' "$value"
 }
+source_url="$(lock_value source)"
+[[ "$source_url" == https://github.com/openwrt/openwrt.git ]] || die "Only the official OpenWrt source is supported"
 source_sha="$(lock_value commit)"
 [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]] || die "upstream.lock must pin a full Git SHA"
+require_official_origin() {
+    [[ "$(git -C "$ow" remote get-url origin)" == "$source_url" ]] || die "OpenWrt origin differs from the official source lock"
+}
 require_source() {
     [[ -d "$ow/.git" ]] || die "Run scripts/prepare.sh $device first"
+    require_official_origin
     [[ "$(git -C "$ow" rev-parse HEAD)" == "$source_sha" ]] || die "OpenWrt checkout differs from lock"
     [[ "$(git -C "$ow" diff --name-only HEAD)" == "$dts_patch" ]] || die "Unexpected tracked upstream changes"
     git -C "$ow" apply --reverse --check "$product_root/patches/001-disable-nokia-pon-pcs.patch"
