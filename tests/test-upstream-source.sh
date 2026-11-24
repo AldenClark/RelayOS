@@ -75,7 +75,9 @@ for model in md mf; do
     checkout="$tmp/good/work/$model/openwrt"
     [[ "$(git -C "$checkout" rev-parse HEAD)" == "$TEST_SHA" ]]
     [[ "$(git -C "$checkout" remote get-url origin)" == "$official" ]]
-    ! git -C "$checkout" symbolic-ref -q HEAD
+    if git -C "$checkout" symbolic-ref -q HEAD; then
+        echo "Expected detached HEAD for $model" >&2; exit 1
+    fi
     grep -Fq 'status = "disabled";' "$checkout/$dts"
 done
 [[ "$(wc -l < "$TEST_LOG")" -eq 2 ]]
