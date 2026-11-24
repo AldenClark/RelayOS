@@ -27,8 +27,13 @@ run_logged() {
     printf 'Starting %s (%s)\n' "$name" "$device"
     df -h "$ow"
     (
+        sleeper=
+        trap '[[ -z "$sleeper" ]] || kill "$sleeper" 2>/dev/null || :; exit 0' TERM INT
         while :; do
-            sleep 120
+            sleep 120 </dev/null >/dev/null 2>&1 &
+            sleeper=$!
+            wait "$sleeper" || exit 0
+            sleeper=
             printf '\n[%s] %s progress / runner resources:\n' "$(date -u +%FT%TZ)" "$name"
             df -h "$ow" || :
             free -m || :
