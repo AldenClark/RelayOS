@@ -260,6 +260,13 @@ async function run() {
   nextError = 'route_conflict';
   assert.equal(await failing.apply(), false); assert.equal(failing.dirty, true);
   assert.equal(failing.draft.peers[0].name, 'Retain me'); assert.match(failing.message, /conflict/);
+  nextError = 'port_conflict';
+  assert.equal(await failing.apply(), false);
+  assert.equal(failing.message, 'WireGuard and IPsec cannot use the same UDP listen ports (500 and 4500).');
+  assert.equal(failing.draft.peers[0].name, 'Retain me'); assert.equal(failing.dirty, true);
+  nextError = 'port_conflict: private backend diagnostic';
+  assert.equal(await failing.apply(), false);
+  assert.ok(!failing.message.includes('private backend diagnostic'));
   nextError = 'unexpected secret-value from server';
   await failing.apply(); assert.ok(!failing.message.includes('secret-value'));
   statusError = new Error('rpc leaked secret-value');
@@ -281,6 +288,40 @@ async function run() {
   concurrent.add(); assert.equal(concurrent.draft.peers.length, 1);
   release(); assert.equal(await first, true);
   assert.equal(calls.filter(c => c.method === 'apply').length, 1);
+
+  reset();
+  let networkBusy = true, gateEntries = 0;
+  const coordination = { async run(operation) {
+    if (networkBusy) throw Object.assign(new Error('Another network operation is in progress.'), { ipsecSafe: true });
+    networkBusy = true; gateEntries++;
+    try { return await operation(); }
+    finally { networkBusy = false; }
+  } };
+  const coordinated = mod.createEditor(initial, agent, false, coordination);
+  coordinated.draft.peers[0].name = 'Keep while network is busy'; coordinated.change();
+  assert.equal(await coordinated.apply(), false);
+  assert.deepEqual(calls, [], 'A competing network transaction blocks even the pre-apply status read');
+  assert.match(coordinated.message, /Another network operation/);
+  assert.equal(coordinated.busy, false); assert.equal(coordinated.dirty, true);
+  assert.equal(coordinated.draft.peers[0].name, 'Keep while network is busy');
+  assert.equal(await coordinated.refresh(), true, 'Read-only refresh does not acquire the network gate');
+  assert.equal(gateEntries, 0); assert.equal(networkBusy, true);
+  networkBusy = false; calls = [];
+  let releaseGate;
+  applyWait = new Promise(resolve => { releaseGate = resolve; });
+  const gatedApply = coordinated.apply();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(networkBusy, true);
+  assert.deepEqual(calls.map(call => call.method), [ 'get', 'apply' ]);
+  await assert.rejects(coordination.run(async () => assert.fail('Network gate must remain held')), /Another network operation/);
+  releaseGate(); assert.equal(await gatedApply, true); applyWait = null;
+  assert.equal(networkBusy, false); assert.equal(gateEntries, 1);
+  assert.equal(coordinated.dirty, false);
+  coordinated.draft.peers[0].name = 'Retain after rejected application'; coordinated.change();
+  nextError = 'route_conflict';
+  assert.equal(await coordinated.apply(), false);
+  assert.equal(networkBusy, false, 'Rejected applications also release the shared gate');
+  assert.equal(coordinated.dirty, true);
 
   reset(); allowed = false;
   const readonly = mod.createEditor(initial, agent, false);

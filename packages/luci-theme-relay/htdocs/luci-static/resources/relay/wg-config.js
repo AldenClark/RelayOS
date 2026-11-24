@@ -7,9 +7,12 @@
 'require relay.agent-state as agentState';
 
 const publicKey = rpc.declare({ object: 'luci.wireguard', method: 'getPublicAndPrivateKeyFromPrivate', params: [ 'privkey' ], expect: { keys: {} } });
+const access = rpc.declare({ object: 'session', method: 'access', params: [ 'scope', 'object', 'function' ], expect: { access: false } });
+const interfaces = rpc.declare({ object: 'network.interface', method: 'dump', expect: { interface: null } });
 
 function keyValid(_id, value) {
-  return !value || (/^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$/.test(value) && !/^A{43}=$/.test(value))
+  return !value || (typeof value === 'string' && value.length === 44 &&
+    /^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$/.test(value) && !/^A{43}=$/.test(value))
     ? true : _('Enter a valid WireGuard key.');
 }
 
@@ -26,16 +29,146 @@ function concealed(option) {
   };
 }
 
-function defaultRoute(value) { return /\/(?:0|0\.0\.0\.0)$/.test(value); }
+function ipv4(value) {
+  if (typeof value !== 'string' || !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(value)) return null;
+  const parts = value.split('.').map(Number);
+  return parts.some(n => n > 255) ? null : parts.reduce((n, octet) => n * 256 + octet, 0);
+}
+
+// LuCI accepts both numeric and dotted masks, including zero-padded forms.
+// Parse them numerically so /00 cannot bypass the default-route guard.
+function subnet(value, mask) {
+  if (typeof value !== 'string') return null;
+  const parts = value.split('/'), address = ipv4(parts[0]);
+  if (parts.length > 2 || address == null) return null;
+  const suffix = parts.length === 2 ? parts[1] : mask == null ? '32' : String(mask);
+  let prefix;
+  if (/^\d{1,2}$/.test(suffix)) prefix = Number(suffix);
+  else {
+    const dotted = ipv4(suffix);
+    if (dotted == null) return null;
+    const bits = dotted.toString(2).padStart(32, '0');
+    if (!/^1*0*$/.test(bits)) return null;
+    prefix = bits.indexOf('0');
+    if (prefix < 0) prefix = 32;
+  }
+  if (prefix > 32) return null;
+  const size = 2 ** (32 - prefix), first = Math.floor(address / size) * size;
+  return { address, first, last: first + size - 1, prefix };
+}
+function overlap(a, b) { return a && b && a.first <= b.last && b.first <= a.last; }
+function defaultRoute(value) { return subnet(value)?.prefix === 0; }
+function unicast(net) {
+  return net && net.first >= 16777216 && net.last < 3758096384 &&
+    !overlap(net, subnet('127.0.0.0/8')) && !overlap(net, subnet('169.254.0.0/16'));
+}
+function routeError() { return new Error(_('WireGuard addresses or routes conflict with another tunnel or the management network.')); }
+
+function validate(names, environment = {}) {
+  const selected = new Set(names.filter(name => uci.get('network', name, 'proto') === 'wireguard'));
+  const reserved = [], locals = [], remotes = [], endpoints = [], ports = new Set();
+  const reservedPorts = new Set(environment.reservedPorts || []);
+  const reserve = (value, mask) => {
+    const net = subnet(value, mask);
+    if (net && net.prefix) reserved.push(net);
+  };
+  for (const value of environment.routes || []) reserve(value);
+  for (const section of uci.sections('network')) {
+    if (Array.isArray(environment.routes) && section.relay_owner === 'relay-ipsec-v1') continue;
+    if (section['.type'] === 'interface' && !selected.has(section['.name']))
+      for (const address of list(section.ipaddr).concat(list(section.addresses))) reserve(address, section.netmask);
+    if (section['.type'] === 'route' && !selected.has(section.interface)) reserve(section.target, section.netmask);
+  }
+  for (const link of environment.interfaces || []) {
+    if (selected.has(link.interface)) continue;
+    // Static interfaces are validated from the intended draft above. A DHCP
+    // lease has no UCI address, so also inspect current netifd addresses/routes.
+    if (uci.get('network', link.interface, 'proto') === 'static') continue;
+    for (const address of link['ipv4-address'] || []) reserve(address.address, address.mask);
+    for (const route of link.route || []) reserve(route.target, route.mask);
+  }
+  for (const name of selected) {
+    const section = uci.get('network', name);
+    const addresses = list(section.addresses);
+    if (!addresses.length) throw new Error(_('Enter a tunnel IPv4 address.'));
+    for (const value of addresses) {
+      const net = subnet(value);
+      if (!net || !net.prefix || !unicast(net)) throw routeError();
+      locals.push({ ...net, name });
+    }
+    const port = section.listen_port ? Number(section.listen_port) : 0;
+    if (port && section.disabled !== '1') {
+      if (reservedPorts.has(port)) throw new Error(_('WireGuard listen port conflicts with the enabled IPsec service.'));
+      if (ports.has(port)) throw new Error(_('Enabled WireGuard tunnels must use different listen ports.'));
+      ports.add(port);
+    }
+    const peers = uci.sections('network', 'wireguard_' + name);
+    if (!peers.length && section.disabled !== '1') throw new Error(_('Keep at least one peer.'));
+    const keys = new Set();
+    for (const peer of peers) {
+      if (peer.public_key && keys.has(peer.public_key))
+        throw new Error(_('Each peer in a WireGuard tunnel must have a different public key.'));
+      if (peer.public_key) keys.add(peer.public_key);
+      const endpoint = ipv4(peer.endpoint_host);
+      if (endpoint != null) endpoints.push({ first: endpoint, last: endpoint });
+      for (const value of list(peer.allowed_ips)) {
+        const net = subnet(value);
+        if (net?.prefix === 0) throw new Error(_('Keep the management default route outside WireGuard.'));
+        if (!unicast(net)) throw routeError();
+        remotes.push({ ...net, name, peer: peer['.name'] });
+      }
+    }
+  }
+  for (const [i, local] of locals.entries()) {
+    if (reserved.some(net => overlap(local, net))) throw routeError();
+    for (const other of locals.slice(i + 1))
+      if (local.address === other.address || (local.name !== other.name && overlap(local, other))) throw routeError();
+  }
+  for (const [i, remote] of remotes.entries()) {
+    if (reserved.some(net => overlap(remote, net)) || endpoints.some(net => overlap(remote, net))) throw routeError();
+    for (const local of locals)
+      if ((local.name !== remote.name && overlap(local, remote)) ||
+          (local.address >= remote.first && local.address <= remote.last)) throw routeError();
+    for (const other of remotes.slice(i + 1))
+      if ((remote.name !== other.name || remote.peer !== other.peer) && overlap(remote, other)) throw routeError();
+  }
+}
+
+async function writable() {
+  const permissions = await Promise.all([ access('uci', 'network', 'write'), access('uci', 'firewall', 'write') ]);
+  return L.hasViewPermission() && permissions.every(value => value === true);
+}
+async function assertEditable() {
+  await agentState.assertManual();
+  if (!await writable()) throw new Error(_('WireGuard settings are read-only.'));
+}
+function edit(map, operation) { return map._coordination?.run ? map._coordination.run(operation) : operation(); }
+async function prepare(map, routes, reservedPorts = []) {
+  await assertEditable();
+  const links = await interfaces();
+  if (!Array.isArray(links)) throw new Error(_('Unable to verify current network routes.'));
+  provision(map._tunnelNames, { interfaces: links, routes, reservedPorts });
+}
 
 // Keep existing assignments and user firewall rules. Only provision missing
 // exit-node membership/forwarding and our own explicit UDP listener rules.
-function provision(names) {
+function provision(names, environment = {}) {
+  names = names.filter(name => uci.get('network', name, 'proto') === 'wireguard');
+  if (!names.length) return;
   const zones = uci.sections('firewall', 'zone');
-  const uplink = zones.find(z => list(z.network).includes('lan'));
-  if (!uplink) throw new Error(_('No firewall zone is assigned to the management interface.'));
+  const uplinks = zones.filter(z => list(z.network).includes('lan'));
+  if (!uplinks.length) throw new Error(_('No firewall zone is assigned to the management interface.'));
+  const uplink = uplinks[0];
+  const ambiguous = zone => zone && (!zone.name || zones.filter(other => other.name === zone.name).length !== 1);
+  if (uplinks.length !== 1 || ambiguous(uplink))
+    throw new Error(_('Tunnel and management firewall zones must be unambiguous.'));
   // Preflight all names and routes before changing any firewall state.
+  validate(names, environment);
   for (const name of names) {
+    const memberships = zones.filter(zone => list(zone.network).includes(name));
+    const zone = memberships[0] || zones.find(zone => zone.name === 'tunnel' || zone.name === 'airrelay_wg');
+    if (memberships.length > 1 || ambiguous(zone))
+      throw new Error(_('Tunnel and management firewall zones must be unambiguous.'));
     const id = 'airrelay_wg_' + name;
     const existing = uci.get('firewall', id);
     if (existing && (existing['.type'] !== 'rule' || existing.name !== 'AirRelay WireGuard ' + name))
@@ -58,6 +191,8 @@ function provision(names) {
         zone = { '.name': id, name: 'airrelay_wg', network: [] };
       }
       uci.set('firewall', zone['.name'], 'network', [ ...list(zone.network), name ]);
+    }
+    if (zone.name !== uplink.name) {
       if (!uci.sections('firewall', 'forwarding').some(f => f.src === zone.name && f.dest === uplink.name)) {
         const id = uci.add('firewall', 'forwarding');
         uci.set('firewall', id, 'src', zone.name);
@@ -85,15 +220,21 @@ function fields(map, name) {
   const section = map.section(form.NamedSection, name, 'interface', name);
   section.addremove = !exists;
   section.addbtntitle = _('Create tunnel');
-  section.handleAdd = async function() {
-    await agentState.assertManual();
+  section.handleAdd = function() { return edit(map, async () => {
+    await assertEditable();
     if (uci.get('network', name)) throw new Error(_('Interface name is already in use.'));
-    uci.add('network', 'interface', name);
-    uci.set('network', name, 'proto', 'wireguard');
-    uci.set('network', name, 'tunlink', 'lan');
-    uci.set('network', name, 'listen_port', '51820');
-    return map.save(null, true);
-  };
+    // Parse the current form before adding a section. Failed validation must
+    // not leave an invisible draft section behind, and parse would otherwise
+    // remove creation defaults for fields which have not been rendered yet.
+    return map.save(() => {
+      uci.add('network', 'interface', name);
+      uci.set('network', name, 'proto', 'wireguard');
+      // Creation must not expose an unguarded native Delete action on redraw.
+      section.addremove = false;
+      uci.set('network', name, 'tunlink', 'lan');
+      uci.set('network', name, 'listen_port', '51820');
+    }, true);
+  }); };
   let o = section.option(form.Flag, 'disabled', _('Enable tunnel'));
   o.enabled = '0'; o.disabled = '1'; o.default = '0'; o.rmempty = false;
   o = section.option(form.Value, 'private_key', _('Private key'));
@@ -106,10 +247,16 @@ function fields(map, name) {
   };
   o.write = o.remove = () => {};
   const pub = o;
-  section.getOption('private_key').onchange = async function(id, value) {
+  let keyRequest = 0;
+  section.getOption('private_key').onchange = async function(_event, id, value) {
+    const request = ++keyRequest;
+    pub.getUIElement(id)?.setValue('');
     if (value && keyValid(id, value) === true) {
-      const pair = await publicKey(value);
-      pub.getUIElement(id)?.setValue(pair.pub || '');
+      try {
+        const pair = await publicKey(value);
+        if (request === keyRequest) pub.getUIElement(id)?.setValue(pair.pub || '');
+      }
+      catch (_err) { /* A failed derivation leaves the public key blank. */ }
     }
   };
   o = section.option(form.DynamicList, 'addresses', _('Tunnel IPv4 addresses'));
@@ -119,12 +266,13 @@ function fields(map, name) {
   o = section.option(form.SectionValue, '_peers', form.TypedSection, 'wireguard_' + name, _('Peers'));
   const peers = o.subsection;
   peers.anonymous = true; peers.addremove = true; peers.addbtntitle = _('Add peer');
-  peers.handleAdd = async function() {
-    await agentState.assertManual();
-    const id = uci.add('network', 'wireguard_' + name);
-    for (const [key, value] of Object.entries(peerDefaults)) uci.set('network', id, key, value);
-    return map.save(null, true);
-  };
+  peers.handleAdd = function() { return edit(map, async () => {
+    await assertEditable();
+    return map.save(() => {
+      const id = uci.add('network', 'wireguard_' + name);
+      for (const [key, value] of Object.entries(peerDefaults)) uci.set('network', id, key, value);
+    }, true);
+  }); };
   const renderPeers = peers.renderContents;
   peers.renderContents = function(ids, nodes) {
     const node = renderPeers.call(this, ids, nodes);
@@ -132,12 +280,17 @@ function fields(map, name) {
       node.querySelectorAll('.cbi-section-remove').forEach(buttons => buttons.remove());
     return node;
   };
-  peers.handleRemove = async function(id) {
-    await agentState.assertManual();
+  peers.handleRemove = function(id) { return edit(map, async () => {
+    await assertEditable();
     if (this.cfgsections().length <= 1) throw new Error(_('Keep at least one peer.'));
-    uci.remove('network', id);
-    return map.save(null, true);
-  };
+    // Exclude only the removal target while parsing: an incomplete new peer
+    // may be deleted, but invalid remaining fields must not silently stage a
+    // deletion when save rejects and leaves the old row visible.
+    const previousFilter = this.filter;
+    this.filter = section => section !== id && (!previousFilter || previousFilter.call(this, section));
+    try { return await map.save(() => uci.remove('network', id), true); }
+    finally { this.filter = previousFilter; }
+  }); };
   o = peers.option(form.Value, 'description', _('Name'));
   o = peers.option(form.Value, 'public_key', _('Peer public key'));
   o.rmempty = false; o.validate = keyValid;
@@ -159,15 +312,15 @@ function fields(map, name) {
     o.renderWidget = () => E('button', {
       class: 'btn cbi-button cbi-button-apply important', disabled: map.readonly || null,
       click: ui.createHandlerFn(null, async () => {
-        await agentState.assertManual();
-        await map.save(() => { provision(map._tunnelNames); });
-        ui.changes.apply(true);
+        if (map._apply) return map._apply(map);
+        await map.save(() => prepare(map));
+        return ui.changes.apply(true);
       })
     }, _('Save & Apply'));
   }
 }
 
-async function render() {
+async function render(options = {}) {
   const names = uci.sections('network', 'interface').filter(s => s.proto === 'wireguard').map(s => s['.name']);
   if (!names.length) {
     let i = 0;
@@ -177,7 +330,10 @@ async function render() {
   const map = new form.Map('network');
   map._tunnelNames = names;
   map.chain('firewall');
-  map.readonly = !L.hasViewPermission();
+  map.readonly = !await writable().catch(() => false);
+  map._apply = options.onApply;
+  map._coordination = options.coordination || {};
+  options.onMap?.(map);
   for (const name of names) fields(map, name);
   // Keep map identity distinct from the management-interface form.
   const original = map.renderContents;
@@ -194,4 +350,4 @@ async function render() {
   ]));
 }
 
-return baseclass.extend({ keyValid, provision, render });
+return baseclass.extend({ keyValid, subnet, validate, provision, prepare, render });

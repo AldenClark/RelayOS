@@ -136,6 +136,14 @@ reject(one({ mtu: 1501 }), 'invalid_config');
 reject(one({ dpd_delay: 0 }), 'invalid_config');
 reject(one({ dpd_delay: 30.5 }), 'invalid_config');
 reject(one({ esp: 'unsafe;proposal' }), 'invalid_config');
+for (let port in [ 500, 4500 ]) {
+    reject(one({}), 'port_conflict', { wireguard_ports: [ port ] });
+    reject({ enabled: true, peers: [] }, 'port_conflict', { wireguard_ports: [ port ] });
+    same(valid({ enabled: false, peers: [ peer(1) ] }, null,
+        { wireguard_ports: [ port ] }).enabled, false, 'Global off permits existing WG IKE port');
+}
+same(valid(one({}), null, { wireguard_ports: [ 51820 ] }).enabled, true,
+    'Distinct WireGuard and IKE ports coexist');
 
 let dnsPlan = plan(valid(one({ remote: 'CLOUD.Example.COM' })), 'uplink');
 same(dnsPlan.ipsec.rp_00000001.options.remote_addrs, [ 'cloud.example.com' ], 'DNS endpoint normalized');

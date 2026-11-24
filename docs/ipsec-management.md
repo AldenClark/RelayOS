@@ -37,6 +37,7 @@ authorization boundary.
 | PSK | 16–128 UTF-8 bytes; use a randomly generated secret, preferably 256 bits or more |
 | DPD interval | 10–3600 seconds; default 30 |
 | MTU | 576–1500; default 1400; tune against the real outer path |
+| UDP listeners | Globally enabled IPsec reserves 500 and 4500; enabled WireGuard tunnels must use other ports |
 | IKE | `aes128-sha256-modp2048` (default) or `aes256-sha256-modp2048` |
 | ESP | `aes128-sha256-noesn` (default), `aes256-sha256-noesn`, or `aes128gcm16-noesn` |
 
@@ -84,6 +85,18 @@ so that an older browser tab cannot overwrite a newer configuration. Native
 generated sections carry an ownership marker. Name collisions, unsupported
 unmanaged IPsec configuration, and pending UCI changes cause an explicit error
 instead of overwriting another configuration.
+
+Status reads check their revision before and after assembling the response, so
+they cannot pair an old peer list with a newer revision. Apply and rollback also
+compare expected persisted bytes immediately before each publication, including
+after slow device commands. A concurrent writer is preserved; if it makes safe
+rollback impossible, the transaction reports `rollback_failed` and retains
+protective routes. This is not a multi-file atomicity guarantee for unrelated
+SSH/UCI writers which do not participate in the manager's lock.
+
+Local postconditions include the actual XFRM MTU and the absence of removed
+interfaces, aliases, addresses and owned routes, as well as the presence of the
+desired state. A zero exit status from network reload alone is insufficient.
 
 The generated datapath uses a native netifd `xfrm` interface plus a static
 address alias for each peer; `proto xfrm` alone does not assign an IP address.
@@ -162,6 +175,11 @@ UCODE=/absolute/path/to/ucode UCI=/absolute/path/to/uci \
 JSDOM_MODULE=/absolute/path/to/node_modules/jsdom \
 LUCI_DIR=/absolute/path/to/pinned/luci \
   node tests/test-ipsec-dom.cjs
+
+# Native LuCI form/validation behavior for WireGuard creation, keys and peers.
+JSDOM_MODULE=/absolute/path/to/node_modules/jsdom \
+LUCI_DIR=/absolute/path/to/pinned/luci \
+  node tests/test-wireguard-dom.cjs
 ```
 
 Set `LD_LIBRARY_PATH` if the locally built native tools require private shared

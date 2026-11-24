@@ -39,6 +39,8 @@ function operationError(code) {
       return _('IPsec settings conflict with an existing route, interface or configuration. Review the settings.');
     case 'identity_conflict':
       return _('IKE identities conflict with another peer. Check local and remote identities.');
+    case 'port_conflict':
+      return _('WireGuard and IPsec cannot use the same UDP listen ports (500 and 4500).');
     case 'key_required':
       return _('A new peer requires a preshared key.');
     case 'pending_changes':
@@ -212,7 +214,8 @@ function newPeer(peers) {
     local_address: '', remote_subnets: [], ike: ikeProposals[0], esp: espProposals[0], dpd_delay: 30, mtu: 1400 };
 }
 
-function createEditor(initial, initialAgent, readonly) {
+function createEditor(initial, initialAgent, readonly, coordination = {}) {
+  const coordinate = operation => coordination.run ? coordination.run(operation) : operation();
   const editor = { state: initial, agent: initialAgent, readonly: !!readonly, busy: false,
     dirty: false, message: '', onchange: () => {} };
   editor.replace = function(next) {
@@ -272,7 +275,7 @@ function createEditor(initial, initialAgent, readonly) {
         ...(peer.psk ? { psk: peer.psk } : {}) })) };
     const validation = validateConfig(config, this.state?.peers);
     if (validation) { this.message = validation; this.onchange('controls'); return false; }
-    return this.run(async () => {
+    return this.run(() => coordinate(async () => {
       const [ current, agent ] = await this.read();
       this.agent = agent;
       if (!canChange(current, agent, this.readonly)) {
@@ -288,7 +291,7 @@ function createEditor(initial, initialAgent, readonly) {
       this.replace(next); this.onchange('replace');
       this.message = _('IPsec settings applied. A ready IKE service does not by itself mean every tunnel is connected.');
       return true;
-    });
+    }));
   };
   return editor;
 }
@@ -298,8 +301,8 @@ function stateText(state) {
     state === 'disabled' ? _('Disabled') : state === 'down' ? _('Not connected') : _('Not yet applied');
 }
 
-function render(state, agent, readonly) {
-  const editor = createEditor(state, agent, readonly);
+function render(state, agent, readonly, coordination = {}) {
+  const editor = createEditor(state, agent, readonly, coordination);
   const peerList = E('div', { class: 'ar-ipsec-peers' }, []);
   const serviceStatus = E('p', { class: 'ar-muted', 'aria-live': 'polite' });
   const permissionStatus = E('p', { class: 'ar-muted', 'aria-live': 'polite' });
@@ -372,7 +375,10 @@ function render(state, agent, readonly) {
     ]);
   }
 
-  const form = E('form', { id: 'cbi-relay-ipsec', class: 'ar-ipsec-config ar-wg-config',
+  // Keep validation in validateConfig(), which reports errors in the visible
+  // status area. Native number-input step validation can otherwise suppress
+  // submit entirely when an invalid advanced field is inside closed details.
+  const form = E('form', { id: 'cbi-relay-ipsec', class: 'ar-ipsec-config ar-wg-config', novalidate: '',
     submit: ev => { ev.preventDefault(); editor.apply(); } }, [
     field(globalId, _('Enable IPsec'), globalToggle), serviceStatus, permissionStatus, hardwareStatus,
     E('p', { class: 'ar-muted' }, _('Changes are applied only when you save. Disabled peers keep protected routes; removing a peer removes its routes.')),

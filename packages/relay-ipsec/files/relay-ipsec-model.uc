@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Pure policy and native-UCI planning; never executes commands or exposes keys.
 export const owner = 'relay-ipsec-v1';
-export const errors = [ 'invalid_config', 'route_conflict', 'identity_conflict',
+export const errors = [ 'invalid_config', 'route_conflict', 'identity_conflict', 'port_conflict',
     'key_required', 'stale_revision', 'busy', 'managed', 'unmanaged_config',
     'pending_changes', 'name_conflict', 'unavailable', 'apply_failed', 'rollback_failed' ];
 
@@ -86,6 +86,11 @@ export function validate(input, previous, environment) {
     if (type(input) != 'object' || !boolean(input.enabled) ||
         type(input.peers) != 'array' || length(input.peers) > 64)
         reject('invalid_config');
+    // Charon binds both IKE and NAT-T sockets while globally enabled, even
+    // when no peer is enabled. Do not replace a working WireGuard listener.
+    if (input.enabled)
+        for (let port in environment.wireguard_ports || [])
+            if (port == 500 || port == 4500) reject('port_conflict');
     let old = {}, ids = {}, identityPairs = {}, remoteIds = {}, localIPs = {}, networks = [], totalRoutes = 0;
     for (let p in previous.peers || []) old[p.id] = p;
     let result = { enabled: input.enabled, peers: [] };

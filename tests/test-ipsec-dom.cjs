@@ -167,6 +167,22 @@ async function run() {
     assert.ok(applies[1].peers.every(peer => !Object.hasOwn(peer, 'psk') && !Object.hasOwn(peer, 'psk_set')));
     assert.equal(field('Enable peer', peers()[1]).checked, false);
 
+    // Native number-input constraints must not swallow our custom validation
+    // when invalid advanced fields are hidden inside a collapsed details node.
+    for (const [ label, invalidValue, validValue, error ] of [
+      [ 'DPD interval (seconds)', '30.5', '30', /DPD interval must be an integer/ ],
+      [ 'Tunnel MTU', '1400.5', '1400', /MTU must be an integer/ ]
+    ]) {
+      const invalidInput = fill(label, invalidValue, peers()[0]);
+      assert.equal(invalidInput.validity.stepMismatch, true);
+      assert.equal(peers()[0].querySelector('details').open, false);
+      await save(); assert.equal(applies.length, 2);
+      assert.match(document.querySelector('[role=status]').textContent, error);
+      assert.equal(field(label, peers()[0]), invalidInput);
+      assert.equal(invalidInput.value, invalidValue);
+      fill(label, validValue, peers()[0]);
+    }
+
     // Validation happens before the apply RPC and keeps all entered values.
     fill('Local IKE identity', '192.0.2.1-192.0.2.10', peers()[0]);
     await save(); assert.equal(applies.length, 2);

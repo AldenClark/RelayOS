@@ -589,3 +589,48 @@ msgstr "所有对端的远端 IPv4 子网合计不得超过 256 个，已关闭�
 
 msgid "Editor resource limits: 64 peers, 32 subnets per peer, 256 subnets total including disabled peers; not protocol or hardware limits."
 msgstr "编辑器资源上限：64 个对端、每对端 32 个子网、总计 256 个子网（含已关闭的对端）；这不是协议或硬件限制。"
+
+msgid "Another network operation is in progress. Try again shortly."
+msgstr "另一个网络操作正在进行，请稍后重试。"
+
+msgid "Discard pending network and firewall changes before applying without the WireGuard editor."
+msgstr "当前无法编辑 WireGuard。请先放弃待应用的网络和防火墙修改，再应用管理网络设置。"
+
+msgid "Each peer in a WireGuard tunnel must have a different public key."
+msgstr "同一 WireGuard 隧道中的每个对端必须使用不同的公钥。"
+
+msgid "Enabled WireGuard tunnels must use different listen ports."
+msgstr "已启用的 WireGuard 隧道必须使用不同的监听端口。"
+
+msgid "Enter a tunnel IPv4 address."
+msgstr "请输入隧道 IPv4 地址。"
+
+msgid "Enter a valid management IPv4 address and contiguous subnet mask."
+msgstr "请输入有效的管理 IPv4 地址，以及连续的子网掩码。"
+
+msgid "Network and WireGuard changes are validated and applied together. IPsec has its own Save & Apply."
+msgstr "管理网络与 WireGuard 的修改会一并校验和应用；IPsec 使用独立的“保存并应用”。"
+
+msgid "Network settings are read-only."
+msgstr "当前会话仅可查看网络设置。"
+
+msgid "The management subnet conflicts with a WireGuard or IPsec tunnel."
+msgstr "管理网段与 WireGuard 或 IPsec 隧道冲突。"
+
+msgid "Tunnel and management firewall zones must be unambiguous."
+msgstr "隧道和管理接口的防火墙分区归属必须唯一。"
+
+msgid "Unable to verify current network routes."
+msgstr "无法核实当前网络路由。"
+
+msgid "WireGuard addresses or routes conflict with another tunnel or the management network."
+msgstr "WireGuard 地址或路由与其他隧道或管理网络冲突。"
+
+msgid "WireGuard and IPsec cannot use the same UDP listen ports (500 and 4500)."
+msgstr "WireGuard 与 IPsec 不能共用 UDP 监听端口 500 或 4500。"
+
+msgid "WireGuard listen port conflicts with the enabled IPsec service."
+msgstr "WireGuard 监听端口与已启用的 IPsec 服务冲突。"
+
+msgid "WireGuard settings are read-only."
+msgstr "当前会话仅可查看 WireGuard 设置。"

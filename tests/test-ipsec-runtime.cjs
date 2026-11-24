@@ -31,6 +31,13 @@ const cmd=path.basename(process.argv[1]), args=process.argv.slice(2);
 let s=JSON.parse(fs.readFileSync(file));
 s.calls.push([cmd,...args]);
 function save(){fs.writeFileSync(file,JSON.stringify(s));}
+function concurrentWrite(phase){
+  if(s.concurrentWrite!==phase)return;
+  const configFile=path.join(dir,'config',phase==='status'?'relay_ipsec':'network');
+  const text=fs.readFileSync(configFile,'utf8');
+  fs.writeFileSync(configFile,phase==='status'?text.replace('Cloud 1','Concurrent Cloud'):text.replace('synthetic-wireguard-key','concurrent-new-wireguard-key'));
+  s.concurrentWrite='';s.concurrentObserved=true;
+}
 // Do not exit with queued asynchronous stdout writes: larger route/ubus JSON
 // responses must reach the worker intact at the configured resource ceiling.
 function result(data='',code=0){save();if(data)fs.writeFileSync(1,typeof data==='string'?data:JSON.stringify(data));process.exit(code);}
@@ -52,6 +59,7 @@ if(cmd==='ubus'){
 }
 if(cmd==='ip'){
   if(args.includes('-batch')){
+    if(args[args.length-1].endsWith('.guards-add'))concurrentWrite('guards');
     const lines=fs.readFileSync(args[args.indexOf('-batch')+1],'utf8').trim().split('\\n').filter(Boolean);
     for(let i=0;i<lines.length;i++){
       const parts=lines[i].split(' '),operation=parts[1],dst=parts[3],metric=Number(parts[parts.indexOf('metric')+1]),protocol=Number(parts[parts.indexOf('proto')+1]);
@@ -94,6 +102,7 @@ if(cmd==='network'){
   }
   if(s.fail==='network_address'){s.fail='';delete s.netdefs.rpa_00000003.ipaddr;}
   if(s.fail==='network_ifid'){s.fail='';s.netdefs.rpx_00000003.ifid='4';}
+  if(s.fail==='network_mtu'){s.fail='';s.netdefs.rpx_00000003.mtu='1280';}
   if(s.fail==='network_route'){s.fail='';s.routes=s.routes.filter(r=>!(r.dst==='10.78.3.1/32'&&r.type==='unicast'));}
   return result();
 }
@@ -111,13 +120,14 @@ if(cmd==='init'){
   if(args[0]==='reload'||args[0]==='start'){
     reject('start');s.running=cfg('ipsec').globals.enabled==='1';
     if(s.running){s.connections=conns();for(const name of s.connections)initiate(name);}
+    concurrentWrite('load');
     return result();
   }
   throw new Error('Unexpected daemon action '+args[0]);
 }
 if(cmd==='pidof')return result(s.running?'1234':'',s.running?0:1);
 if(cmd==='swan'){
-  if(args.includes('--stats')){if(s.statsFailure)return result('',1);return result('',s.running?0:1);}
+  if(args.includes('--stats')){concurrentWrite('status');if(s.statsFailure)return result('',1);return result('',s.running?0:1);}
   if(!s.running)return result('',1);
   if(args.includes('--list-sas')){if(s.failListSAOnce){s.failListSAOnce=false;return result('',1);}return result(Object.entries(s.sas).map(([name,v])=>name+': #'+v.number+', '+v.state+', IKEv2, test\\n  '+name+'_child: #'+v.number+', reqid 1, '+v.child+', TUNNEL, ESP:test\\n').join(''));}
   if(args.includes('--list-conns'))return result(s.connections.map(n=>n+': IKEv2, test\\n  '+n+'_child: TUNNEL\\n').join(''));
@@ -221,6 +231,9 @@ try {
   for(const name of ['relay_ipsec','ipsec'])assert.equal(fs.statSync(path.join(configDir,name)).mode&0o777,0o600);
   for(const name of ['loopback','lan','wg0','original_wg_peer'])assert.deepEqual(rawConfig('network')[name],original[name]);
   assert.equal(rawConfig('firewall').user_rule.name,'User-defined rule');
+  // Never return old peer data paired with a newer external writer's revision.
+  patchDevice({concurrentWrite:'status'});expectError(call('get'),'stale_revision');
+  state=expectOk(call('get'));assert.equal(state.peers[0].name,'Concurrent Cloud');
   const bSA=device().sas.rp_00000002.number;
   // Cosmetic update must not terminate any SA or restart the daemon.
   patchDevice({calls:[]});config=nextConfig(state);config.peers[0].name='Renamed peer';state=expectOk(apply(config));
@@ -272,7 +285,7 @@ try {
   }
   // Successful exit status is not enough: kernel addresses, if_id and active
   // routes must agree with the generated XFRM configuration.
-  for(const failure of ['network_skip','network_address','network_ifid','network_route']){
+  for(const failure of ['network_skip','network_address','network_ifid','network_mtu','network_route']){
     const before=filesSnapshot();state=expectOk(call('get'));config=nextConfig(state);config.peers.push(peer(3));
     patchDevice({fail:failure});expectError(apply(config),'apply_failed');assert.deepEqual(filesSnapshot(),before);
     assert.equal(device().sas.rp_00000002.number,bSA);assert.ok(!device().routes.some(r=>r.dst==='10.78.3.1/32'));
@@ -298,6 +311,63 @@ try {
   patchDevice({fail:'firewall',failPersistent:true});expectError(apply(config),'rollback_failed');
   assert.equal(device().sas.rp_00000002.number,unaffected);
   assert.ok(device().routes.some(r=>r.type==='unreachable'&&r.metric===42759&&r.dst==='10.78.1.1/32'));
+  // IKE and NAT-T have fixed listeners. Reject enabling IPsec when an enabled
+  // WireGuard interface already reserves either UDP port; no runtime writes.
+  for(const port of [500,4500]){
+    reset();
+    const networkFile=path.join(configDir,'network');
+    fs.writeFileSync(networkFile,read('network').replace(" option proto 'wireguard'", " option proto 'wireguard'\n option listen_port '"+port+"'"));
+    state=expectOk(call('get'));const prior=filesSnapshot();patchDevice({calls:[]});
+    expectError(apply({revision:state.revision,enabled:true,peers:[peer(1)]}),'port_conflict');
+    assert.deepEqual(filesSnapshot(),prior);
+    assert.ok(!device().calls.some(c=>['init','network','firewall'].includes(c[0])));
+    state=expectOk(apply({revision:state.revision,enabled:false,peers:[peer(1)]}));
+    assert.equal(state.enabled,false);
+    fs.writeFileSync(networkFile,read('network').replace("option proto 'wireguard'", "option proto 'wireguard'\n\toption disabled '1'"));
+    state=expectOk(call('get'));state=expectOk(apply({...nextConfig(state),enabled:true}));
+  }
+  // Detect committed changes during device commands before publication. The
+  // other writer's WireGuard settings must never be replaced with our snapshot.
+  reset();state=expectOk(call('get'));
+  const beforeConcurrent=filesSnapshot();
+  patchDevice({concurrentWrite:'guards'});
+  expectError(apply({revision:state.revision,enabled:true,peers:[peer(1)]}),'stale_revision');
+  assert.equal(device().concurrentObserved,true);
+  assert.equal(rawConfig('network').wg0.private_key,'concurrent-new-wireguard-key');
+  for(const name of ['relay_ipsec','ipsec','firewall'])assert.equal(read(name),beforeConcurrent[name]);
+  assert.ok(!device().routes.some(r=>r.metric===42759));
+  // A conflicting write after publication cannot be rolled back safely. Report
+  // that explicitly, preserve the concurrent bytes and keep route protection.
+  for(const rotating of [true,false]){
+    reset();state=expectOk(call('get'));state=expectOk(apply({revision:state.revision,enabled:true,peers:[peer(1),peer(2)]}));
+    const preserved=device().sas.rp_00000002.number;
+    config=nextConfig(state);
+    if(rotating)config.peers[0].psk='replacement-synthetic-secret';else config.peers[0].name='Cosmetic change';
+    patchDevice({concurrentWrite:'load'});
+    expectError(apply(config),'rollback_failed');
+    assert.equal(device().concurrentObserved,true);
+    assert.equal(rawConfig('network').wg0.private_key,'concurrent-new-wireguard-key');
+    assert.equal(device().sas.rp_00000002.number,preserved);
+    assert.ok(device().routes.some(r=>r.type==='unreachable'&&r.metric===42759));
+  }
+  // Postconditions include removal, not only presence of the desired state.
+  // A reload returning zero without applying deletion/MTU/address edits must
+  // fail and restore the previous configuration instead of reporting success.
+  for(const edit of ['delete','prefix','mtu','address']){
+    reset();state=expectOk(call('get'));
+    const first={...peer(1),remote_subnets:['10.78.1.1/32','10.78.1.3/32']};
+    state=expectOk(apply({revision:state.revision,enabled:true,peers:[first,peer(2)]}));
+    const prior=filesSnapshot(),preserved=device().sas.rp_00000002.number;
+    config=nextConfig(state);
+    if(edit==='delete')config.peers.shift();
+    if(edit==='prefix')config.peers[0].remote_subnets.pop();
+    if(edit==='mtu')config.peers[0].mtu=1300;
+    if(edit==='address')config.peers[0].local_address='10.78.1.4/32';
+    patchDevice({fail:'network_skip'});expectError(apply(config),'apply_failed');
+    assert.deepEqual(filesSnapshot(),prior);
+    assert.equal(device().sas.rp_00000002.number,preserved);
+    assert.ok(!device().routes.some(r=>r.metric===42759));
+  }
   // Exercise the resource ceiling with real UCI parsing, not just model mocks.
   reset();state=expectOk(call('get'));
   const group=Array.from({length:64},(_,i)=>({...peer(i+1),remote_subnets:Array.from({length:4},(_,j)=>'10.79.'+(i+1)+'.'+(j+1)+'/32')}));

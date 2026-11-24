@@ -106,6 +106,7 @@ function peerState(text, p, enabled) {
     return hasSA(text, p.id) ? 'connecting' : 'down';
 }
 function status() {
+    let initialRevision = revision();
     let c = native(), config = readConfig(c), allowed = manual();
     let up = ready(), text = '';
     if (up) {
@@ -116,6 +117,7 @@ function status() {
     let output = publicConfig(config);
     output.ok = true;
     output.revision = revision();
+    if (output.revision != initialRevision) fail('stale_revision');
     output.manual = allowed;
     output.ready = up;
     output.eip93 = !!length(filter(split(fs.readfile(paths.crypto) || '', '\n'),
@@ -222,7 +224,7 @@ function preflight(c, generated) {
                 fail('name_conflict');
 }
 function environment(c) {
-    let env = { routes: [], addresses: [] };
+    let env = { routes: [], addresses: [], wireguard_ports: [] };
     let ownDevices = {}, ownRoutes = {};
     for (let s in sections(c, 'network')) {
         if (s.relay_owner != owner) continue;
@@ -241,6 +243,8 @@ function environment(c) {
     }
     for (let s in sections(c, 'network')) {
         if (s.relay_owner == owner) continue;
+        if (s['.type'] == 'interface' && s.proto == 'wireguard' && s.disabled != '1' && s.listen_port)
+            push(env.wireguard_ports, int(s.listen_port));
         for (let value in list(s.addresses)) push(env.addresses, index(value, '/') >= 0 ? value : value + '/32');
         for (let value in list(s.ipaddr)) {
             let bits = s.netmask ? prefix(s.netmask) : 32;
@@ -292,6 +296,21 @@ function snapshot() {
         files[package] = { data, mode: st.mode & 511 };
     }
     return files;
+}
+function unchanged(files, written, code) {
+    // Device commands between staging and publication may run long enough for
+    // another LuCI session or UCI writer to commit. Never adopt or overwrite
+    // that writer's bytes as if they were part of this transaction.
+    for (let package in packages)
+        if (fs.readfile(paths.config + '/' + package) !=
+            (written[package] ?? files[package].data)) fail(code);
+}
+function publish(stage, package, files, written) {
+    unchanged(files, written, 'stale_revision');
+    let data = fs.readfile(stage + '/' + package);
+    if (data === null || !fs.rename(stage + '/' + package, paths.config + '/' + package))
+        fail('apply_failed');
+    written[package] = data;
 }
 function secureWrite(file, data, mode) {
     let handle = fs.open(file, 'wx', mode);
@@ -458,8 +477,7 @@ function quiesce(config, ids, files, written, zone) {
         for (let name, definition in plan(quiet, zone).ipsec) set(c, 'ipsec', name, definition);
         if (!c.set('ipsec', 'globals', 'enabled', quiet.enabled ? '1' : '0') ||
             !c.commit('ipsec') || !fs.chmod(stage + '/ipsec', 384)) fail('apply_failed');
-        if (!fs.rename(stage + '/ipsec', paths.config + '/ipsec')) fail('apply_failed');
-        written.ipsec = fs.readfile(paths.config + '/ipsec');
+        publish(stage, 'ipsec', files, written);
         // Remove affected definitions FIRST so a remote cannot reauthenticate
         // with the old PSK between SA termination and final credential reload.
         // Reloading the complete quiet aggregate retains all unchanged peers.
@@ -468,7 +486,7 @@ function quiesce(config, ids, files, written, zone) {
     } catch (error) { clean(stage); throw error; }
     clean(stage);
 }
-function verifyNetwork(config) {
+function verifyNetwork(config, previous) {
     for (let attempt = 0; attempt < 4; attempt++) {
         let links, addresses, routes, dump;
         try {
@@ -481,6 +499,7 @@ function verifyNetwork(config) {
         for (let p in config.peers) {
             let suffix = substr(p.id, 1), name = 'rpx_' + suffix, address = 'rpa_' + suffix;
             if (!length(filter(links, (l) => l.ifname == name && index(l.flags || [], 'UP') >= 0 &&
+                int(l.mtu) == p.mtu &&
                 normalizeIfId(l.linkinfo?.info_data?.if_id) == int(suffix, 16)))) complete = false;
             if (!length(filter(dump.interface || [], (i) => i.interface == address &&
                 i.up === true && i.l3_device == name))) complete = false;
@@ -491,6 +510,33 @@ function verifyNetwork(config) {
                 if (!length(filter(routes, (r) => (!r.type || r.type == 'unicast') &&
                     (r.dst == target || r.dst + '/32' == target) && r.dev == name && r.metric == 50)))
                     complete = false;
+        }
+        // A successful reload also has to remove obsolete owned state. Merely
+        // finding every desired interface misses failed deletion, removed
+        // prefixes and stale addresses after an edit.
+        let desiredGuards = guards(config);
+        for (let p in previous.peers) {
+            let suffix = substr(p.id, 1), name = 'rpx_' + suffix, address = 'rpa_' + suffix;
+            let next = filter(config.peers, (n) => n.id == p.id)[0];
+            if (!next) {
+                if (length(filter(links, (l) => l.ifname == name)) ||
+                    length(filter(addresses, (i) => i.ifname == name)) ||
+                    length(filter(dump.interface || [], (i) => i.interface == name || i.interface == address)))
+                    complete = false;
+            } else if (next.local_address != p.local_address) {
+                for (let iface in filter(addresses, (i) => i.ifname == name))
+                    if (length(filter(iface.addr_info || [], (a) => a.family == 'inet' &&
+                        a.local + '/' + a.prefixlen == p.local_address))) complete = false;
+            }
+            for (let target in p.remote_subnets) {
+                if (!next || index(next.remote_subnets, target) < 0)
+                    if (length(filter(routes, (r) => (!r.type || r.type == 'unicast') &&
+                        (r.dst == target || r.dst + '/32' == target) && r.dev == name && r.metric == 50)))
+                        complete = false;
+                if (index(desiredGuards, target) < 0)
+                    if (length(filter(routes, (r) => r.type == 'unreachable' && r.metric == 42760 &&
+                        (r.dst == target || r.dst + '/32' == target)))) complete = false;
+            }
         }
         if (complete) return;
         requireRun([ cmd.sleep, '0.2' ], 1);
@@ -523,14 +569,11 @@ function apply(request) {
         routeBatch(stage, '.guards-add', 'replace', union);
         verifyGuards(union, 42759);
         quiesce(previous, affected, files, written, zone);
-        for (let package in packages) {
-            if (!fs.rename(stage + '/' + package, paths.config + '/' + package)) fail('apply_failed');
-            written[package] = fs.readfile(paths.config + '/' + package);
-        }
+        for (let package in packages) publish(stage, package, files, written);
         requireRun([ cmd.fw4, 'check' ], 2);
         requireRun([ cmd.network, 'reload' ], 3);
         verifyGuards(afterGuards, 42760);
-        verifyNetwork(target);
+        verifyNetwork(target, previous);
         requireRun([ cmd.firewall, 'reload' ], 3);
         load(target);
         let inactive = filter(affected, (id) => !target.enabled ||
@@ -539,6 +582,7 @@ function apply(request) {
         // Configured-but-disabled routes stay protected. Temporary guards also
         // cover removed prefixes until all application/postcondition checks pass.
         let response = status();
+        unchanged(files, written, 'stale_revision');
         releaseGuards(stage, union);
         clean(stage);
         return response;
@@ -554,21 +598,20 @@ function apply(request) {
         deadline = now() + 8;
         try {
             // Refuse to overwrite a concurrent configuration writer on rollback.
-            for (let package in packages)
-                if (fs.readfile(paths.config + '/' + package) !=
-                    (written[package] ?? files[package].data)) fail('rollback_failed');
+            unchanged(files, written, 'rollback_failed');
             let reverse = changedPeers(target, previous);
             quiesce(target, reverse, files, written, zone);
             for (let package in packages) {
                 fs.unlink(stage + '/' + package);
                 secureWrite(stage + '/' + package, files[package].data, files[package].mode);
-                if (!fs.rename(stage + '/' + package, paths.config + '/' + package)) fail('rollback_failed');
+                publish(stage, package, files, written);
             }
             requireRun([ cmd.network, 'reload' ], 2);
             requireRun([ cmd.firewall, 'reload' ], 2);
             load(previous);
             verifyGuards(beforeGuards, 42760);
-            verifyNetwork(previous);
+            verifyNetwork(previous, target);
+            unchanged(files, written, 'rollback_failed');
             if (guarded) releaseGuards(stage, union);
         } catch (rollback) {
             // Preserve union guards on failed recovery; do not fall back to

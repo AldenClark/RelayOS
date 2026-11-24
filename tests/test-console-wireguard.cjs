@@ -4,13 +4,15 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const resources = path.resolve(__dirname, '../packages/luci-theme-relay/htdocs/luci-static/resources/relay');
-let serviceState = {}, serviceError = null;
+let serviceState = {}, serviceError = null, writeAllowed = true, runtimeInterfaces = [], keyReplies = null;
 const dependencies = {
   baseclass: { extend: value => value }, _: value => value, form: {}, ui: {},
   L: { hasViewPermission: () => true }, E: (tag,attrs,children) => ({tag,attrs,children}),
-  rpc: { declare: spec => () => spec.object === 'rc'
+  rpc: { declare: spec => (...args) => spec.object === 'rc'
     ? (serviceError ? Promise.reject(serviceError) : Promise.resolve(serviceState))
-    : Promise.resolve({}) }
+    : spec.object === 'session' ? Promise.resolve(writeAllowed)
+    : spec.object === 'network.interface' ? Promise.resolve(runtimeInterfaces)
+    : keyReplies ? new Promise(resolve => keyReplies.push({ key: args[0], resolve })) : Promise.resolve({}) }
 };
 function module(name) {
   const names = Object.keys(dependencies);
@@ -19,7 +21,7 @@ function module(name) {
 const agent = dependencies.agentState = module('agent-state');
 let db, serial, changes;
 const uci = dependencies.uci = {
-  sections(config, type) { return Object.entries(db[config]).filter(([,v])=>v['.type']===type).map(([id,v])=>({...v,'.name':id})); },
+  sections(config, type) { return Object.entries(db[config]).filter(([,v])=>type == null || v['.type']===type).map(([id,v])=>({...v,'.name':id})); },
   get(config,id,key) { return key == null ? db[config][id] : db[config][id]?.[key]; },
   set(config,id,key,value) { changes++; db[config][id][key]=value; },
   add(config,type,id='test'+(++serial)) { changes++; assert.equal(db[config][id], undefined); db[config][id]={'.type':type}; return id; },
@@ -28,7 +30,7 @@ const uci = dependencies.uci = {
 const wg = module('wg-config');
 function reset() {
   serial=0; changes=0;
-  db={network:{wg0:{'.type':'interface',proto:'wireguard',listen_port:'51820'}},firewall:{up:{'.type':'zone',name:'uplink',network:['lan','extra'],input:'REJECT'},custom:{'.type':'rule',name:'User rule',dest_port:'22'}}};
+  db={network:{wg0:{'.type':'interface',proto:'wireguard',listen_port:'51820',addresses:['10.77.0.2/32']},peer:{'.type':'wireguard_wg0',allowed_ips:['10.77.0.1/32']}},firewall:{up:{'.type':'zone',name:'uplink',network:['lan','extra'],input:'REJECT'},custom:{'.type':'rule',name:'User rule',dest_port:'22'}}};
 }
 async function run() {
   assert.deepEqual(agent.classify({}), {installed:false,enabled:false,managed:false});
@@ -43,7 +45,7 @@ async function run() {
   await assert.rejects(agent.assertManual(),/RPC unavailable/);
   serviceError=null;
   assert.equal(wg.keyValid('',Buffer.alloc(32,1).toString('base64')),true);
-  for (const value of ['bad','A'.repeat(43)+'=', 'x'.repeat(43)+'='])
+  for (const value of ['bad','A'.repeat(43)+'=', 'x'.repeat(43)+'=', Buffer.alloc(32,1).toString('base64')+'\n'])
     assert.notEqual(wg.keyValid('',value),true);
   reset(); const custom=structuredClone(db.firewall.custom);
   wg.provision(['wg0']);
@@ -66,12 +68,25 @@ async function run() {
   assert.equal(db.firewall.airrelay_wg_wg0,undefined);
   reset(); db.firewall.vpn={'.type':'zone',name:'vpn',network:['wg0','other'],input:'ACCEPT'};
   db.firewall.up.input='ACCEPT'; const before=structuredClone(db.firewall);
-  wg.provision(['wg0']); assert.deepEqual(db.firewall,before);
+  wg.provision(['wg0']);
+  assert.deepEqual(db.firewall.vpn,before.vpn); assert.deepEqual(db.firewall.custom,before.custom);
+  assert.equal(db.firewall.up.masq,'1');
+  assert.ok(uci.sections('firewall','forwarding').some(s=>s.src==='vpn'&&s.dest==='uplink'));
+  assert.equal(db.firewall.airrelay_wg_wg0,undefined);
   reset(); delete db.firewall.up;
   assert.throws(()=>wg.provision(['wg0']),/No firewall zone/); assert.equal(changes,0);
   reset(); db.firewall.airrelay_wg_wg0={'.type':'rule',name:'User-owned rule'};
   assert.throws(()=>wg.provision(['wg0']),/already in use/); assert.equal(changes,0);
-  for (const ip of ['0.0.0.0/0','10.1.2.3/0','0.0.0.0/0.0.0.0']) {
+  for (const zones of [
+    {other:{'.type':'zone',name:'other',network:['lan']}},
+    {other:{'.type':'zone',name:'uplink',network:['other']}},
+    {a:{'.type':'zone',name:'a',network:['wg0']},b:{'.type':'zone',name:'b',network:['wg0']}},
+    {a:{'.type':'zone',name:'tunnel',network:[]},b:{'.type':'zone',name:'tunnel',network:[]}}
+  ]) {
+    reset(); Object.assign(db.firewall,zones);
+    assert.throws(()=>wg.provision(['wg0']),/unambiguous/); assert.equal(changes,0);
+  }
+  for (const ip of ['0.0.0.0/0','10.1.2.3/0','0.0.0.0/0.0.0.0','0.0.0.0/00','0.0.0.0/000.000.000.000']) {
     reset(); db.network.peer={'.type':'wireguard_wg0',allowed_ips:[ip],route_allowed_ips:'1'};
     assert.throws(()=>wg.provision(['wg0']),/default route/); assert.equal(changes,0);
   }
@@ -80,6 +95,52 @@ async function run() {
   wg.provision(['wg0']);
   assert.equal(db.network.peer.route_allowed_ips,'1');
   assert.equal(db.network.peer.persistent_keepalive,'25');
+
+  // The WireGuard editor must reject conflicts in the reverse direction too:
+  // already configured IPsec routes/addresses, management DHCP and other peers.
+  for (const conflicting of [
+    { '.type':'interface',proto:'static',ipaddr:'10.77.0.2/32' },
+    { '.type':'route',target:'10.77.0.0/24',interface:'rpa_00000001' },
+    { '.type':'route',target:'10.77.0.1',netmask:'255.255.255.255',type:'unreachable' },
+    { '.type':'wireguard_wg0',allowed_ips:['10.77.0.1/32'] }
+  ]) {
+    reset(); db.network.conflict=conflicting;
+    assert.throws(()=>wg.provision(['wg0']),/conflict/); assert.equal(changes,0);
+  }
+  reset();
+  db.network.oldIpsec={'.type':'route',target:'10.77.0.1/32',relay_owner:'relay-ipsec-v1'};
+  assert.throws(()=>wg.provision(['wg0']),/conflict/);
+  wg.provision(['wg0'],{routes:[]});
+  reset();
+  assert.throws(()=>wg.provision(['wg0'],{routes:['10.77.0.1/32']}),/conflict/); assert.equal(changes,0);
+  assert.throws(()=>wg.provision(['wg0'],{interfaces:[{interface:'lan','ipv4-address':[{address:'10.77.0.50',mask:24}]}]}),/conflict/);
+  assert.equal(changes,0);
+  assert.throws(()=>wg.provision(['wg0'],{interfaces:[{interface:'lan',route:[{target:'10.77.0.1',mask:32}]}]}),/conflict/);
+  assert.equal(changes,0);
+  for (const bad of ['10.77.0.1/255.0.255.0','127.0.0.1/32','169.254.1.1/32','224.0.0.1/32']) {
+    reset(); db.network.peer.allowed_ips=[bad];
+    assert.throws(()=>wg.provision(['wg0']),/conflict/); assert.equal(changes,0);
+  }
+  reset(); db.network.wg0.addresses=['10.77.0.2/1'];
+  assert.throws(()=>wg.provision(['wg0']),/conflict/); assert.equal(changes,0);
+  reset(); db.network.peer.endpoint_host='10.77.0.1';
+  assert.throws(()=>wg.provision(['wg0']),/conflict/); assert.equal(changes,0);
+  reset(); db.network.wg1={'.type':'interface',proto:'wireguard',addresses:['10.78.0.2/32'],listen_port:'51820'};
+  db.network.peer1={'.type':'wireguard_wg1',allowed_ips:['10.78.0.1/32']};
+  assert.throws(()=>wg.provision(['wg0','wg1']),/different listen ports/); assert.equal(changes,0);
+  db.network.wg1.listen_port='51821'; wg.provision(['wg0','wg1']);
+  for (const port of ['500','4500']) {
+    reset(); db.network.wg0.listen_port=port;
+    assert.throws(()=>wg.provision(['wg0'],{reservedPorts:[500,4500]}),/IPsec service/); assert.equal(changes,0);
+    db.network.wg0.disabled='1'; wg.provision(['wg0'],{reservedPorts:[500,4500]});
+  }
+  reset(); db.network.peer.public_key='one'; db.network.peer2={'.type':'wireguard_wg0',public_key:'one',allowed_ips:['10.77.0.3/32']};
+  assert.throws(()=>wg.provision(['wg0']),/different public key/); assert.equal(changes,0);
+  reset(); delete db.network.peer;
+  assert.throws(()=>wg.provision(['wg0']),/at least one peer/); assert.equal(changes,0);
+  reset(); db.network.wg0.addresses=['10.77.0.2/24']; wg.provision(['wg0']);
+  assert.equal(wg.subnet('10.77.0.1/255.255.255.0').prefix,24);
+  assert.equal(wg.subnet('10.77.0.1/255.0.255.0'),null);
 
   // Exercise peer UI guards with synthetic native-form objects; no device UCI.
   const maps=[];
@@ -100,7 +161,7 @@ async function run() {
       constructor(){this.sections=[];this.saves=0;maps.push(this);}
       chain(){}
       section(type,...args){const s=new Section(this,type,args);this.sections.push(s);return s;}
-      save(){this.saves++;return Promise.resolve();}
+      save(cb){this.saves++;return Promise.resolve().then(cb);}
       renderContents(){return {classList:{add(){}},id:''};}
       render(){return this.renderContents();}
     }});
@@ -138,6 +199,32 @@ async function run() {
   assert.equal(db.network.wg0.tunlink,'lan');
   assert.equal(db.network.wg0.listen_port,'51820');
   assert.equal(db.network.wg0.private_key,undefined);
+  assert.equal(emptyTunnel.addremove,false, 'Created tunnel must not expose native unguarded Delete');
+
+  writeAllowed=false;
+  await wg.render(); assert.equal(maps.at(-1).readonly,true);
+  await assert.rejects(peers.handleAdd(),/read-only/);
+  writeAllowed=true;
+  reset();
+  runtimeInterfaces=null;
+  await assert.rejects(wg.prepare({_tunnelNames:['wg0']}),/verify current network/); assert.equal(changes,0);
+  runtimeInterfaces=[{interface:'lan','ipv4-address':[{address:'10.77.0.9',mask:24}]}];
+  await assert.rejects(wg.prepare({_tunnelNames:['wg0']}),/conflict/); assert.equal(changes,0);
+  runtimeInterfaces=[];
+  await wg.prepare({_tunnelNames:['wg0']});
+
+  // Out-of-order key derivation cannot relabel the latest private key.
+  await wg.render();
+  const keySection=maps.at(-1).sections[0], visible=[];
+  keySection.options._public_key.getUIElement=()=>({setValue:value=>visible.push(value)});
+  keyReplies=[];
+  const oldKey=keySection.options.private_key.onchange({},'wg0',Buffer.alloc(32,1).toString('base64'));
+  const newKey=keySection.options.private_key.onchange({},'wg0',Buffer.alloc(32,2).toString('base64'));
+  keyReplies[1].resolve({pub:'new'}); await newKey;
+  keyReplies[0].resolve({pub:'old'}); await oldKey;
+  assert.equal(visible.at(-1),'new');
+  await keySection.options.private_key.onchange({},'wg0',''); assert.equal(visible.at(-1),'');
+  keyReplies=null;
 
   console.log('RelayOS WireGuard: Agent ownership, keys, route protection and firewall preservation OK');
 }

@@ -106,6 +106,16 @@ up to three top-level navigation items:
    Old `/network` and `/upgrade` URLs alias this page.
 3. **AirRoute Agent:** installation state only; no Agent is bundled.
 
+Management-network and WireGuard forms share native UCI pending changes. Both
+**Save & Apply** buttons now validate both forms before saving, including
+ownership, route overlap and listening-port conflicts, and use LuCI's confirmed
+apply/rollback. IPsec keeps its separate transaction and draft. Same-page
+mutations are serialized, including WireGuard peer add/remove and the native
+apply confirmation modal. Network/firewall write permissions are checked
+independently of other settings on the page. See the
+[control/UI audit](docs/control-ui-audit-2026-11-25.md) for verified fixes and
+remaining device acceptance.
+
 The standard `luci-mod-admin-full` back-end views remain installed for
 development and recovery, but they are **not shown in the RelayOS navigation**.
 This is a UI simplification, **not** a new authorization boundary. Only the
