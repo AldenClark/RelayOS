@@ -32,6 +32,8 @@ case "$1" in
         touch package/feeds/relayos/luci-theme-relay/Makefile
         mkdir -p package/feeds/relayos/relay-ipsec
         touch package/feeds/relayos/relay-ipsec/Makefile
+        mkdir -p package/feeds/relayos/crypto-airoha-armv8
+        touch package/feeds/relayos/crypto-airoha-armv8/Makefile
         ;;
     *) exit 1 ;;
 esac

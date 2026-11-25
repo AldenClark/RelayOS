@@ -32,5 +32,8 @@ done
 for feature in WIREGUARD XFRM_USER INET_ESP XFRM_INTERFACE CRYPTO_DEV_EIP93; do
     grep -Eq "^CONFIG_${feature}=(y|m)$" "$kernel_config" || die "Kernel missing required data-plane feature: $feature"
 done
+for feature in CRYPTO_AES_ARM64_CE CRYPTO_AES_ARM64_CE_BLK CRYPTO_GHASH_ARM64_CE; do
+    grep -qx "CONFIG_${feature}=m" "$kernel_config" || die "Kernel missing required Airoha crypto module: CONFIG_$feature"
+done
 
 echo "RelayOS $subtarget optimized kernel config verified."

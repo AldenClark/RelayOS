@@ -44,6 +44,7 @@ for feature in \
     CONFIG_PACKAGE_kmod-ipsec4 \
     CONFIG_PACKAGE_kmod-xfrm-interface \
     CONFIG_PACKAGE_kmod-crypto-hw-eip93 \
+    CONFIG_PACKAGE_kmod-crypto-airoha-armv8 \
     CONFIG_PACKAGE_kmod-crypto-gcm \
     CONFIG_PACKAGE_xfrm \
     CONFIG_PACKAGE_ip-full \

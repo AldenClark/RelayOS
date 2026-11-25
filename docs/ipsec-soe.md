@@ -4,7 +4,8 @@
 
 The default MD/MF build includes strongSwan 6.0.7 from the pinned packages
 feed, charon, swanctl/VICI, a selected PSK-capable plugin set, kernel XFRM
-and ESP, native XFRM interfaces, ip-full, and kmod-crypto-hw-eip93.
+and ESP, native XFRM interfaces, ip-full, kmod-crypto-hw-eip93, and
+kmod-crypto-airoha-armv8.
 The OpenWrt package's dependencies may include IPv6 XFRM even though
 RelayOS currently forwards IPv4 only. No userspace TUN/ESP engine,
 legacy starter/stroke, or iptables updown plugin is selected.
@@ -41,8 +42,13 @@ Sources:
 Use modern IKEv2 PSK (random 256-bit secret per peer) and test ESP
 `aes128-sha256-noesn` or `aes256-sha256-noesn` for the EIP93 Crypto API
 path. ESN uses authencesn instead of authenc in ESP; no EIP93 authencesn
-implementation is assumed. Compare `aes128gcm16` on ARM64 CPU crypto
-extensions. Do not select obsolete DES, MD5 or SHA1 merely because the
+implementation is assumed. For `aes128gcm16-noesn`, the Airoha package
+autoloads `aes-ce-cipher`, `aes-ce-blk` and `ghash-ce`. On CPUs with
+PMULL, `ghash-ce` registers `rfc4106-gcm-aes-ce` and uses ARMv8 AES
+and PMULL instructions for ESP. Establish new SAs after loading the
+drivers and check that `seqiv(rfc4106-gcm-aes-ce)` in `/proc/crypto`
+has active references while the corresponding CHILD_SA packet counters
+increase. Do not select obsolete DES, MD5 or SHA1 merely because the
 hardware registers them. Keep anti-replay enabled, rekey before sequence
 exhaustion, and configure matching proposals on the first-hop peer.
 `hw_offload = no` leaves the normal kernel Crypto API selection intact;

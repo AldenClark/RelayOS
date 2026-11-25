@@ -40,6 +40,7 @@ for name in relay-ipsec \
             kmod-ipsec4 \
             kmod-xfrm-interface \
             kmod-crypto-hw-eip93 \
+            kmod-crypto-airoha-armv8 \
             kmod-crypto-gcm \
             xfrm \
             ip-full \
