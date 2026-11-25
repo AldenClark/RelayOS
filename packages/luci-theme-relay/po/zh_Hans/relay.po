@@ -460,3 +460,60 @@ msgstr "保存并应用后将删除接口 %s 及其对端。"
 
 msgid "Peer %d"
 msgstr "对端 %d"
+
+msgid "Are you sure you want to change the IP address mode? If you are unfamiliar with the network topology, do not change it."
+msgstr "确定要修改 IP 获取方式吗？如果你不熟悉网络拓扑，请勿修改。"
+
+msgid "Change current account password"
+msgstr "修改当前账户密码"
+
+msgid "Change password"
+msgstr "修改密码"
+
+msgid "Change password…"
+msgstr "修改密码…"
+
+msgid "Current password"
+msgstr "当前密码"
+
+msgid "New password"
+msgstr "新密码"
+
+msgid "Confirm new password"
+msgstr "确认新密码"
+
+msgid "The new passwords do not match."
+msgstr "两次输入的新密码不一致。"
+
+msgid "Password changed. Use the new password the next time you sign in."
+msgstr "密码已修改，下次登录请使用新密码。"
+
+msgid "The current password is incorrect."
+msgstr "当前密码不正确。"
+
+msgid "Enter a valid new password."
+msgstr "请输入有效的新密码。"
+
+msgid "Unable to change the password."
+msgstr "无法修改密码。"
+
+msgid "Reboot device"
+msgstr "重启设备"
+
+msgid "Reboot device…"
+msgstr "重启设备…"
+
+msgid "Reboot device?"
+msgstr "确定要重启设备吗？"
+
+msgid "The device will briefly go offline. Unsaved changes will be lost."
+msgstr "设备会暂时离线，未保存的修改将丢失。"
+
+msgid "Rebooting device…"
+msgstr "正在重启设备…"
+
+msgid "Waiting for the device to reconnect."
+msgstr "正在等待设备重新连接。"
+
+msgid "Device reboot failed."
+msgstr "重启设备失败。"

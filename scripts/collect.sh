@@ -26,5 +26,6 @@ cp "$product_root/feeds.conf" "$artifact_dir/relayos-$device.feeds.buildinfo"
     printf 'device=%s\nboard=%s\n' "$device" "$board"
     printf 'kernel=%s\n' "$(awk '$1 ~ /^LINUX_VERSION-/ {print $1,$3}' "$ow/target/linux/generic/kernel-6.18")"
     printf 'product_patch_sha256=%s\n' "$(sha256sum "$product_root/patches/001-disable-nokia-pon-pcs.patch" | cut -d' ' -f1)"
+    printf 'dropbear_patch_sha256=%s\n' "$(sha256sum "$product_root/patches/002-dropbear-track-bound-device.patch" | cut -d' ' -f1)"
 } > "$artifact_dir/relayos-$device.source.buildinfo"
 (cd "$artifact_dir"; sha256sum ./*.itb ./*.manifest ./*.buildinfo ./*.kernel.config > "RELAYOS-$device-SHA256SUMS")

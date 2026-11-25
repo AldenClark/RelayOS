@@ -13,8 +13,8 @@ require_official_origin
 git -C "$ow" fetch --depth=1 --no-tags origin "$source_sha"
 git -C "$ow" checkout --detach "$source_sha"
 [[ "$(git -C "$ow" rev-parse HEAD)" == "$source_sha" ]] || die "Wrong upstream revision"
-git -C "$ow" apply --check "$product_root/patches/001-disable-nokia-pon-pcs.patch"
-git -C "$ow" apply "$product_root/patches/001-disable-nokia-pon-pcs.patch"
+git -C "$ow" apply --check "${upstream_patches[@]}"
+git -C "$ow" apply "${upstream_patches[@]}"
 require_source
 git -C "$ow" diff --check
 

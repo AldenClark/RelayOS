@@ -10,6 +10,19 @@
 
 const access = rpc.declare({ object: 'session', method: 'access',
   params: [ 'scope', 'object', 'function' ], expect: { access: false } });
+const displayApplyStatus = ui.changes.displayStatus;
+
+function displayNetworkApplyStatus(type, content) {
+  // Keep LuCI's apply callbacks and other progress dialogs intact.
+  if (type === 'warning' && Array.isArray(content) && content[0]?.textContent === _('Connectivity change')) {
+    const buttons = content[2]?.querySelector('.cbi-button-action.important');
+    if (buttons) {
+      content[1].textContent = _('Are you sure you want to change the IP address mode? If you are unfamiliar with the network topology, do not change it.');
+      buttons.remove();
+    }
+  }
+  return displayApplyStatus.call(this, type, content);
+}
 
 async function networkWritable() {
   try { return L.hasViewPermission() && await access('uci', 'network', 'write') === true; }
@@ -86,6 +99,7 @@ return view.extend({
   },
 
   render([_network, _firewall, agent, writable]) {
+    ui.changes.displayStatus = displayNetworkApplyStatus;
     const map = new form.Map('network', _('Network interfaces'));
     map.readonly = !writable;
     this._networkMap = map;

@@ -13,10 +13,16 @@ export TEST_FIXTURE="$tmp/upstream" TEST_LOG="$tmp/fetch.log"
 export TEST_FAIL_FETCH=0
 mkdir -p "$TEST_FIXTURE/scripts" "$tmp/bin"
 dts=target/linux/airoha/dts/an758x-nokia_xg-040g-common.dtsi
-mkdir -p "$TEST_FIXTURE/$(dirname "$dts")"
-# Use the old-side context of the actual product patch to create its preimage.
-awk '/^@@ / { h=1; next } h && /^[ -]/ { print substr($0,2) }' \
-    "$root/patches/001-disable-nokia-pon-pcs.patch" > "$TEST_FIXTURE/$dts"
+dropbear=package/network/services/dropbear/files/dropbear.init
+# Use the old-side context of each actual product patch to create its preimage.
+patch_preimage() {
+    local patch="$1" target="$2"
+    mkdir -p "$TEST_FIXTURE/$(dirname "$target")"
+    awk '/^@@ / { h=1; next } h && /^[ -]/ { print substr($0,2) }' \
+        "$root/patches/$patch" > "$TEST_FIXTURE/$target"
+}
+patch_preimage 001-disable-nokia-pon-pcs.patch "$dts"
+patch_preimage 002-dropbear-track-bound-device.patch "$dropbear"
 cat > "$TEST_FIXTURE/scripts/feeds" <<'EOF'
 #!/bin/sh
 set -eu
@@ -62,7 +68,7 @@ make_product() {
     local path="$1" url="$2" sha="$3"
     mkdir -p "$path/scripts" "$path/patches" "$path/packages"
     cp "$root/scripts/common.sh" "$root/scripts/prepare.sh" "$path/scripts/"
-    cp "$root/patches/001-disable-nokia-pon-pcs.patch" "$path/patches/"
+    cp "$root"/patches/*.patch "$path/patches/"
     printf 'source=%s\ncommit=%s\n' "$url" "$sha" > "$path/upstream.lock"
     printf 'src-git packages https://github.com/openwrt/packages.git^%s\nsrc-git luci https://github.com/openwrt/luci.git^%s\n' \
         "$TEST_SHA" "$TEST_SHA" > "$path/feeds.conf"
@@ -79,6 +85,7 @@ for model in md mf; do
         echo "Expected detached HEAD for $model" >&2; exit 1
     fi
     grep -Fq 'status = "disabled";' "$checkout/$dts"
+    grep -Fq 'procd_set_param netdev "${ndev}"' "$checkout/$dropbear"
 done
 [[ "$(wc -l < "$TEST_LOG")" -eq 2 ]]
 

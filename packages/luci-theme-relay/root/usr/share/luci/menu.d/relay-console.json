@@ -60,6 +60,16 @@
       ]
     }
   },
+  "admin/relay/password": {
+    "action": {
+      "type": "template",
+      "path": "relay/password",
+      "post": true
+    },
+    "depends": {
+      "acl": [ "luci-mod-system-config" ]
+    }
+  },
   "admin/relay/network": {
     "action": {
       "type": "alias",

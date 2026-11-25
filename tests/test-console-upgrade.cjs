@@ -38,7 +38,8 @@ function verifyPackagedUpgradeContract() {
     'feeds/luci/modules/luci-mod-system/root/usr/share/rpcd/acl.d/luci-mod-system.json');
   assert.ok(fs.existsSync(aclFile), 'Pinned LuCI ACL must exist');
   {
-    const acl = JSON.parse(fs.readFileSync(aclFile, 'utf8'))['luci-mod-system-flash'];
+    const aclGroups = JSON.parse(fs.readFileSync(aclFile, 'utf8'));
+    const acl = aclGroups['luci-mod-system-flash'];
     for (const command of [
       '/sbin/sysupgrade --test /tmp/firmware.bin',
       '/sbin/sysupgrade /tmp/firmware.bin',
@@ -49,6 +50,7 @@ function verifyPackagedUpgradeContract() {
     assert.ok(acl.write.ubus['cgi-io']?.includes('upload') || acl.write['cgi-io']?.includes('upload'));
     assert.ok(acl.write.ubus.system?.includes('validate_firmware_image'));
     assert.ok(acl.write.ubus.file?.includes('remove'));
+    assert.ok(aclGroups['luci-mod-system-reboot'].write.ubus.system.includes('reboot'));
   }
 }
 
@@ -133,6 +135,13 @@ function makeHarness(options = {}) {
   const rpc = {
     declare(spec) {
       assert.equal(spec.object, 'system');
+      if (spec.method === 'reboot') {
+        assert.equal(spec.reject, true);
+        return () => {
+          calls.push([ 'reboot' ]);
+          return options.rebootError ? Promise.reject(options.rebootError) : Promise.resolve();
+        };
+      }
       assert.equal(spec.method, 'validate_firmware_image');
       return target => {
         calls.push([ 'validate', target ]);
@@ -233,6 +242,27 @@ async function test() {
     assert.equal(ctx.calls.some(c => c.includes('--force') || c.includes('-F')), false);
   }
 
+  {
+    const readonly = makeHarness();
+    assert.equal(button(readonly.page.render(), 'Reboot device…').disabled, true);
+
+    const ctx = makeHarness({ canWrite: true });
+    await button(ctx.page.render(), 'Reboot device…').click();
+    assert.equal(ctx.lastModal().title, 'Reboot device?');
+    await button(ctx.lastModal().children, 'Cancel').click();
+    assert.equal(ctx.calls.some(c => c[0] === 'reboot'), false);
+    await button(ctx.page.render(), 'Reboot device…').click();
+    await button(ctx.lastModal().children, 'Reboot device').click();
+    assert.equal(ctx.calls.filter(c => c[0] === 'reboot').length, 1);
+    assert.deepEqual(ctx.reconnects, [[ '192.168.1.3' ]]);
+  }
+  {
+    const ctx = makeHarness({ canWrite: true, rebootError: new Error('Access denied') });
+    await ctx.page.confirmReboot();
+    assert.equal(ctx.lastModal().title, 'Device reboot failed.');
+    assert.equal(ctx.reconnects.length, 0);
+  }
+
   // Factory reset requires an explicit confirmation; cancel never executes it.
   {
     const ctx = makeHarness({ canWrite: true });
@@ -256,7 +286,7 @@ async function test() {
     assert.equal(ctx.reconnects.length, 0);
   }
 
-  console.log('RelayOS firmware upgrade: picker, upload, validation, cancel, and flash RPC flow OK');
+  console.log('RelayOS system actions: upgrade, reboot, and reset RPC flows OK');
 }
 
 test().catch(err => { console.error(err); process.exitCode = 1; });

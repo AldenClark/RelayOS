@@ -29,6 +29,7 @@ window.eval(fs.readFileSync(path.join(luci, 'cbi.js'), 'utf8'));
 window._ = text => text;
 window.L = Object.create(window.LuCI.prototype);
 window.L.hasViewPermission = () => true;
+window.L.url = path => '/cgi-bin/luci/' + path;
 window.E = (...args) => window.L.dom.create(...args);
 const copy = value => JSON.parse(JSON.stringify(value));
 let db, serial = 0, statusError = null, statusBarrier = null;
@@ -36,7 +37,7 @@ let failMutation = null, applies = 0, coordination;
 const modules = {
   baseclass: window.LuCI.extend({ __init__() {} }), dom: window.L.dom,
   view: { extend: value => value },
-  request: {}, session: { getLocalData: () => null, setLocalData() {} },
+  request: { poll: { active: () => false, stop() {} } }, session: { getLocalData: () => null, setLocalData() {} },
   poll: { add() {}, remove() {} }, fs: {},
   agentState: { status: async () => ({ managed: false }), assertManual: async () => {} },
   systemManager: { render: () => window.E('div') },
@@ -86,6 +87,7 @@ modules.ui.changes.apply = confirmed => {
   assert.equal(confirmed, true); applies++;
   document.body.classList.add('modal-overlay-active');
 };
+modules.systemManager = load('system', path.join(root, 'packages/luci-theme-relay/htdocs/luci-static/resources/relay'));
 modules.wgConfig = load('wg-config', path.join(root, 'packages/luci-theme-relay/htdocs/luci-static/resources/relay'));
 const renderWireGuard = modules.wgConfig.render;
 modules.wgConfig.render = function(options) {
@@ -124,6 +126,58 @@ async function mount() {
 async function run() {
   try {
     await mount();
+    const element = (tag, text, className = '') => {
+      const node = document.createElement(tag);
+      node.textContent = text;
+      node.className = className;
+      return node;
+    };
+    const applyRows = element('div', '', 'button-row');
+    applyRows.append(
+      element('button', 'Cancel', 'btn cbi-button'),
+      element('button', 'Apply checked', 'btn cbi-button-action important'),
+      element('button', 'Apply unchecked', 'btn cbi-button-negative important')
+    );
+    const message = element('p', 'Old message');
+    modules.ui.changes.displayStatus('warning', [element('h4', 'Connectivity change'), message, applyRows]);
+    assert.match(message.textContent, /change the IP address mode/);
+    assert.deepEqual([...applyRows.querySelectorAll('button')].map(node => node.textContent), ['Cancel', 'Apply unchecked']);
+    modules.ui.hideModal();
+
+    const passwordButton = [...document.querySelectorAll('.ar-system-action button')].find(node => node.textContent === 'Change password…');
+    const posts = [];
+    let reply = 'incorrect';
+    modules.request.post = async (url, data, options) => {
+      posts.push([url, new URLSearchParams(data), options]);
+      return { ok: true, json: () => ({ status: reply }) };
+    };
+    passwordButton.click();
+    const passwordForm = document.querySelector('.ar-password-form');
+    const [current, password, confirmation] = passwordForm.querySelectorAll('input');
+    assert.ok([current, password, confirmation].every(input => input.type === 'password'));
+    current.value = 'old-test-password';
+    password.value = 'new-test-password';
+    confirmation.value = 'different';
+    const submitPassword = () => passwordForm.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    submitPassword();
+    assert.equal(posts.length, 0);
+    assert.match(passwordForm.querySelector('[role=status]').textContent, /do not match/);
+    confirmation.value = password.value;
+    submitPassword();
+    await flush();
+    assert.match(passwordForm.querySelector('[role=status]').textContent, /current password is incorrect/);
+    assert.equal(current.value, '');
+    assert.equal(posts[0][0], '/cgi-bin/luci/admin/relay/password');
+    assert.equal(posts[0][1].has('username'), false);
+    current.value = 'old-test-password';
+    reply = 'ok';
+    submitPassword();
+    await flush();
+    assert.ok(!document.body.classList.contains('modal-overlay-active'));
+    assert.equal(password.value, '');
+    assert.match(document.querySelector('main').textContent, /Password changed/);
+    await mount();
+
     const original = fill('lan', 'ipaddr', '192.168.1.21');
     statusError = new window.Error('Current routes unavailable');
     networkButton().click(); await flush();

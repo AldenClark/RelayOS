@@ -1,0 +1,12 @@
+diff --git a/package/network/services/dropbear/files/dropbear.init b/package/network/services/dropbear/files/dropbear.init
+--- a/package/network/services/dropbear/files/dropbear.init
++++ b/package/network/services/dropbear/files/dropbear.init
+@@ -318,6 +318,8 @@
+ 	procd_set_param command "$PROG" -F -P "$pid_file"
+ 	if [ -n "${iface}" ] ; then
+ 		# if ${iface} is non-empty then ${ndev} is non-empty too
++		# Restart when netifd recreates the same device with a different ifindex.
++		procd_set_param netdev "${ndev}"
+ 		procd_append_param command -l "${ndev}" -p "${Port}"
+ 	else
+ 		if [ -z "${ipaddrs}" ] ; then

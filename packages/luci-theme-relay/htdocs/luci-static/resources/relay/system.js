@@ -3,6 +3,7 @@
 'require rpc';
 'require fs';
 'require ui';
+'require request';
 
 // Follow LuCI's vetted firmware upload and system.validate_firmware_image
 // / sysupgrade --test path. Reset uses the native firstboot command.
@@ -11,8 +12,68 @@ const validateImage = rpc.declare({
   expect: { '': { valid: false, allow_backup: false } }
 });
 const firmwarePath = '/tmp/firmware.bin';
+const reboot = rpc.declare({ object: 'system', method: 'reboot', reject: true });
 
 return baseclass.extend({
+  handleChangePassword() {
+    const current = E('input', { type: 'password', maxlength: 1024, autocomplete: 'current-password' });
+    const password = E('input', { type: 'password', maxlength: 128, autocomplete: 'new-password', required: '' });
+    const confirmation = E('input', { type: 'password', maxlength: 128, autocomplete: 'new-password', required: '' });
+    const error = E('p', { class: 'ar-password-error', role: 'status' });
+    const cancel = E('button', { type: 'button', class: 'btn', click: () => ui.hideModal() }, _('Cancel'));
+    const submit = E('button', { type: 'submit', class: 'btn cbi-button-action important' }, _('Change password'));
+    const controls = [ current, password, confirmation, cancel, submit ];
+
+    const form = E('form', { class: 'ar-password-form', submit: async event => {
+      event.preventDefault();
+      if (submit.disabled) return;
+      if (!password.value || password.value !== confirmation.value) {
+        error.textContent = _('The new passwords do not match.');
+        return;
+      }
+      const data = new URLSearchParams({
+        token: L.env.token, current_password: current.value, new_password: password.value
+      });
+      for (const control of controls) control.disabled = true;
+      error.textContent = '';
+      try {
+        const response = await request.post(L.url('admin/relay/password'), data.toString(), {
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        });
+        const status = response.ok ? response.json().status : null;
+        if (status === 'ok') {
+          current.value = password.value = confirmation.value = '';
+          ui.hideModal();
+          ui.addNotification(null, E('p', {}, _('Password changed. Use the new password the next time you sign in.')), 'info');
+        }
+        else if (status === 'incorrect') {
+          current.value = '';
+          error.textContent = _('The current password is incorrect.');
+        }
+        else if (status === 'invalid') {
+          error.textContent = _('Enter a valid new password.');
+        }
+        else {
+          error.textContent = _('Unable to change the password.');
+        }
+      }
+      catch (_err) {
+        error.textContent = _('Unable to change the password.');
+      }
+      finally {
+        for (const control of controls) control.disabled = false;
+      }
+    } }, [
+      E('label', {}, [ E('span', {}, _('Current password')), current ]),
+      E('label', {}, [ E('span', {}, _('New password')), password ]),
+      E('label', {}, [ E('span', {}, _('Confirm new password')), confirmation ]),
+      error,
+      E('div', { class: 'ar-modal-actions' }, [ cancel, submit ])
+    ]);
+    ui.showModal(_('Change current account password'), form);
+    current.focus();
+  },
+
   handleUpload() {
     // Do not gate the file picker on a best-effort filesystem stat or the
     // frontend view permission hint. The upload RPC enforces authorization,
@@ -99,6 +160,36 @@ return baseclass.extend({
     ui.awaitReconnect(window.location.host);
   },
 
+  handleReboot() {
+    ui.showModal(_('Reboot device?'), [
+      E('p', {}, _('The device will briefly go offline. Unsaved changes will be lost.')),
+      E('div', { class: 'ar-modal-actions' }, [
+        E('button', { class: 'btn', click: ui.hideModal }, _('Cancel')),
+        E('button', {
+          class: 'btn cbi-button-action important',
+          click: ui.createHandlerFn(this, 'confirmReboot')
+        }, _('Reboot device'))
+      ])
+    ]);
+  },
+
+  async confirmReboot() {
+    ui.showModal(_('Rebooting device…'), [
+      E('p', { class: 'spinning' }, _('Waiting for the device to reconnect.'))
+    ]);
+    try {
+      await reboot();
+    }
+    catch (err) {
+      ui.showModal(_('Device reboot failed.'), [
+        E('p', { class: 'alert-message danger' }, err.message || _('Device reboot failed.')),
+        E('div', { class: 'ar-modal-actions' }, E('button', { class: 'btn', click: ui.hideModal }, _('Close')))
+      ]);
+      return;
+    }
+    ui.awaitReconnect(window.location.host);
+  },
+
   handleFactoryReset() {
     ui.showModal(_('Reset system?'), [
       E('p', {}, _('All settings will be erased and the device will restart. Its management address will be obtained via DHCP.')),
@@ -143,11 +234,27 @@ return baseclass.extend({
       E('h2', {}, _('System management')),
       E('div', { class: 'ar-panel ar-system-actions' }, [
         E('div', { class: 'ar-system-action' }, [
+          E('strong', {}, _('Change current account password')),
+          E('button', {
+            class: 'btn cbi-button-action',
+            disabled: L.hasViewPermission() ? null : true,
+            click: ui.createHandlerFn(this, 'handleChangePassword')
+          }, _('Change password…'))
+        ]),
+        E('div', { class: 'ar-system-action' }, [
           E('strong', {}, _('Firmware upgrade')),
           E('button', {
             class: 'btn cbi-button-action important',
             click: ui.createHandlerFn(this, 'handleUpload')
           }, _('Choose firmware…'))
+        ]),
+        E('div', { class: 'ar-system-action' }, [
+          E('strong', {}, _('Reboot device')),
+          E('button', {
+            class: 'btn cbi-button-action',
+            disabled: L.hasViewPermission() ? null : true,
+            click: ui.createHandlerFn(this, 'handleReboot')
+          }, _('Reboot device…'))
         ]),
         E('div', { class: 'ar-system-action' }, [
           E('strong', {}, _('Reset system')),

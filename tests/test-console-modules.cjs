@@ -40,7 +40,7 @@ const dependencies = {
   baseclass: BaseClass,
   view: BaseClass,
   rpc: { declare: () => () => Promise.resolve({}) },
-  form: {}, uci: {}, poll: {}, fs: {}, ui: {}, request: {},
+  form: {}, uci: {}, poll: {}, fs: {}, ui: { changes: { displayStatus() {} } }, request: {},
   Date: { now: () => now }
 };
 

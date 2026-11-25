@@ -227,8 +227,12 @@ body.ar-ui input:not([type="checkbox"]):not([type="radio"]):not([type="button"])
 body.modal-overlay-active #modal_overlay { display: flex; align-items: flex-start; justify-content: center; }
 #modal_overlay > .modal { width: min(100%,570px); margin: auto; padding: 26px; background: white; color: var(--ar-ink); border: 1px solid #d9e7e3; border-radius: 18px; box-shadow: 0 30px 100px rgba(0,36,36,.16); }
 #modal_overlay .modal h4 { font-size: 19px; margin: 0 0 18px; }
-#modal_overlay .modal .right { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 9px; margin-top: 17px; }
-#modal_overlay .modal .right > * { margin: 0; }
+#modal_overlay .modal :is(.right, .button-row) { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 9px; margin-top: 17px; }
+#modal_overlay .modal :is(.right, .button-row) > * { margin: 0; }
+.ar-password-form > label { display: grid; gap: 7px; margin-bottom: 14px; }
+.ar-password-form > label > input { width: 100%; }
+.ar-password-error { color: #b75a58; }
+.ar-password-error:empty { display: none; }
 .cbi-progressbar { height: 10px; margin: 20px 0; background: #e8f3f0; border-radius: 999px; overflow: hidden; }
 .cbi-progressbar > div { height: 100%; background: var(--ar-accent); border-radius: 999px; transition: width .16s; }
 .spinning { display: inline-flex; align-items: center; gap: 11px; }
