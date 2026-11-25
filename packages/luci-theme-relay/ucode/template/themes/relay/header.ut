@@ -17,7 +17,7 @@
     <meta name="color-scheme" content="light">
     <meta name="darkreader-lock">
     <title>{{ striptags(`RelayOS${dispatched?.title ? ` · ${_(dispatched.title)}` : ''}`) }}</title>
-    <link rel="stylesheet" href="{{ media }}/cascade.css?v={{ version.distrevision }}-10">
+    <link rel="stylesheet" href="{{ media }}/cascade.css?v={{ version.distrevision }}-11">
     <link rel="icon" type="image/svg+xml" href="{{ media }}/logo.svg">
     {% if (dispatched?.css): %}
     <link rel="stylesheet" href="{{ resource }}/{{ dispatched.css }}">

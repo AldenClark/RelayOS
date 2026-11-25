@@ -136,7 +136,9 @@ async function save() {
 async function run() {
   try {
     await load();
-    assert.ok(document.body.textContent.includes('64 peers, 32 subnets per peer, 256 subnets total including disabled peers'));
+    assert.ok(form().matches('.cbi-map'));
+    assert.ok(form().querySelector('.cbi-section > .cbi-section-node #relay-ipsec-enabled'));
+    assert.doesNotMatch(form().textContent, /Disabled|EIP-93|Changes are applied only|Editor resource limits|No IPsec peers configured/);
     assert.equal(document.querySelectorAll('input[type=checkbox]').length, 1);
     assert.ok(![ ...document.querySelectorAll('button') ].some(b => /^(Enable|Disable) IPsec$/.test(b.textContent)));
     assert.equal(button('Save & Apply').disabled, true);

@@ -304,9 +304,8 @@ function stateText(state) {
 function render(state, agent, readonly, coordination = {}) {
   const editor = createEditor(state, agent, readonly, coordination);
   const peerList = E('div', { class: 'ar-ipsec-peers' }, []);
-  const serviceStatus = E('p', { class: 'ar-muted', 'aria-live': 'polite' });
-  const permissionStatus = E('p', { class: 'ar-muted', 'aria-live': 'polite' });
-  const hardwareStatus = E('p', { class: 'ar-muted' });
+  const serviceStatus = E('p', { class: 'ar-ipsec-message', 'aria-live': 'polite' });
+  const permissionStatus = E('p', { class: 'ar-ipsec-message', 'aria-live': 'polite' });
   const message = E('p', { class: 'ar-ipsec-message', role: 'status', 'aria-live': 'polite' });
   const pending = E('span', { class: 'ar-muted ar-ipsec-pending' });
   const control = (type, attrs = {}, children) => E(type, { 'data-ipsec-edit': '', ...attrs }, children);
@@ -341,7 +340,7 @@ function render(state, agent, readonly, coordination = {}) {
       return field(fieldId(key), title, select);
     }
     const savedPeer = editor.state?.peers.find(p => p.id === peer.id);
-    return E('section', { class: 'ar-ipsec-peer cbi-section', 'data-peer-id': peer.id }, [
+    return E('div', { class: 'ar-ipsec-peer cbi-section-node', 'data-peer-id': peer.id }, [
       E('div', { class: 'ar-ipsec-peer-head' }, [
         E('h3', { 'data-ipsec-name': peer.id }, [ peer.name || _('New peer') ]),
         E('span', { class: 'ar-muted', 'data-ipsec-status': peer.id }, stateText(savedPeer?.state)),
@@ -378,22 +377,24 @@ function render(state, agent, readonly, coordination = {}) {
   // Keep validation in validateConfig(), which reports errors in the visible
   // status area. Native number-input step validation can otherwise suppress
   // submit entirely when an invalid advanced field is inside closed details.
-  const form = E('form', { id: 'cbi-relay-ipsec', class: 'ar-ipsec-config ar-wg-config', novalidate: '',
+  const form = E('form', { id: 'cbi-relay-ipsec', class: 'cbi-map ar-wg-config ar-ipsec-config', novalidate: '',
     submit: ev => { ev.preventDefault(); editor.apply(); } }, [
-    field(globalId, _('Enable IPsec'), globalToggle), serviceStatus, permissionStatus, hardwareStatus,
-    E('p', { class: 'ar-muted' }, _('Changes are applied only when you save. Disabled peers keep protected routes; removing a peer removes its routes.')),
-    E('p', { class: 'ar-muted' }, _('Editor resource limits: 64 peers, 32 subnets per peer, 256 subnets total including disabled peers; not protocol or hardware limits.')),
-    peerList, addButton,
-    E('div', { class: 'ar-modal-actions' }, [ pending, refreshButton, discardButton, saveButton ]), message
+    E('div', { class: 'cbi-section' }, [
+      E('div', { class: 'cbi-section-node' }, [
+        field(globalId, _('Enable IPsec'), globalToggle), serviceStatus, permissionStatus
+      ]),
+      peerList,
+      E('div', { class: 'cbi-section-create' }, addButton),
+      E('div', { class: 'cbi-page-actions' }, [ pending, refreshButton, discardButton, saveButton ]),
+      message
+    ])
   ]);
   const panel = E('section', { class: 'ar-wg-editor ar-ipsec-editor' }, [ E('h2', {}, _('IPsec (IKEv2)')), form ]);
 
   function update(reason) {
     if (reason === 'replace' || reason === 'peers') {
       globalToggle.checked = editor.draft.enabled;
-      L.dom.content(peerList, editor.draft.peers.length ? editor.draft.peers.map(peerCard) : [
-        E('p', { class: 'ar-muted ar-ipsec-empty' }, _('No IPsec peers configured. Add a peer to create a tunnel.'))
-      ]);
+      L.dom.content(peerList, editor.draft.peers.map(peerCard));
     }
     const writable = editor.writable();
     // Status refreshes must not rebuild inputs or lose drafts/focus.
@@ -411,14 +412,11 @@ function render(state, agent, readonly, coordination = {}) {
     refreshButton.disabled = editor.busy;
     const current = editor.state;
     serviceStatus.textContent = !current ? _('IPsec service status is unavailable.') :
-      current.ready ? _('IKE service ready') : current.enabled ? _('IKE service not responding') : _('Disabled');
+      current.enabled && !current.ready ? _('IKE service not responding') : '';
     permissionStatus.textContent = !current ? '' :
       current.can_apply !== true || editor.readonly || !L.hasViewPermission() ?
         _('IPsec settings are read-only for this session.') :
       !canChange(current, editor.agent, editor.readonly) ? _('IPsec is managed by AirRoute Agent or unavailable.') : '';
-    permissionStatus.hidden = !permissionStatus.textContent;
-    hardwareStatus.textContent = current ? (current.eip93 ?
-      _('EIP-93 driver registered; hardware use depends on the negotiated ESP algorithm.') : _('EIP-93 driver not registered.')) : '';
     pending.textContent = editor.dirty ? _('Unsaved changes') : '';
     message.textContent = editor.message;
     form.setAttribute('aria-busy', editor.busy ? 'true' : 'false');

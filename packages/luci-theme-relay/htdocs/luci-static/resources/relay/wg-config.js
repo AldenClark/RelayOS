@@ -317,6 +317,7 @@ function provision(names, environment = {}) {
 function fields(map, name) {
   const exists = uci.get('network', name, 'proto') === 'wireguard';
   const section = map.section(form.NamedSection, name, 'interface', name);
+  section.hidetitle = map._tunnelNames.length === 1;
   section.addremove = !exists;
   section.addbtntitle = _('Create tunnel');
   section.handleAdd = function() { return edit(map, async () => {
@@ -413,6 +414,16 @@ function fields(map, name) {
     if (list(value).some(defaultRoute))
       return _('Keep the management default route outside WireGuard.');
     return prefixValid(id, value);
+  };
+  for (const option of section.children.slice(1)) {
+    option.depends('disabled', '0');
+    option.retain = true;
+  }
+  // SectionValue parses its nested section even when its wrapper is hidden.
+  const peerOption = section.getOption('_peers');
+  const parsePeers = peerOption.parse;
+  peerOption.parse = function(id) {
+    if (this.isActive(id)) return parsePeers.call(this, id);
   };
   if (name === map._tunnelNames[map._tunnelNames.length - 1]) {
     o = section.option(form.DummyValue, '_apply', ' ');

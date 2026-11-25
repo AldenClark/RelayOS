@@ -413,25 +413,25 @@ body.ar-ui select.ar-language { padding-right: 25px !important; background-posit
 .ar-wg-config .control-group > input.cbi-input-password { flex: 1 1 0; width: 0; min-width: 0; }
 .ar-wg-config .control-group > .cbi-button { flex: 0 0 38px; padding: 0; min-height: 39px; }
 
-/* The isolated IPsec form follows the same layout as the native WG editor. */
-.ar-ipsec-config { margin-top: 16px; }
-body.ar-ui .ar-ipsec-config .ar-ipsec-peer { margin: 20px 0; padding: 18px 20px; }
+.ar-ipsec-peer { margin-top: 20px; }
+.ar-ipsec-peer + .ar-ipsec-peer { border-top: 1px solid var(--ar-line); padding-top: 16px; }
 .ar-ipsec-peer-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
 .ar-ipsec-peer-head h3 { flex: 1 1 130px; min-width: 0; margin: 0; overflow-wrap: anywhere; }
 .ar-ipsec-peer-head .cbi-button-remove { margin: 0; }
-.ar-ipsec-config .cbi-value-field > input[type="checkbox"] { width: 18px; height: 18px; }
-.ar-ipsec-config .cbi-value-field > textarea { display: block; width: min(100%, 420px); box-sizing: border-box; resize: vertical; }
+.ar-ipsec-config .cbi-value-field > input[type="checkbox"] { width: auto; }
+.ar-ipsec-config .cbi-value-field > .cbi-input-text,
+.ar-ipsec-config .cbi-value-field > textarea { width: min(100%, 360px); box-sizing: border-box; }
+.ar-ipsec-config .cbi-value-field > textarea { display: block; resize: vertical; }
 .ar-ipsec-advanced { margin-top: 14px; }
 .ar-ipsec-advanced > summary { cursor: pointer; color: var(--ar-muted); font-size: 12px; padding: 8px 0; }
 .ar-ipsec-pending { margin-right: auto; }
 .ar-ipsec-message { margin-top: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 .ar-ipsec-message:empty { display: none; }
-.ar-ipsec-empty { padding: 12px 0; }
 @media (max-width: 600px) {
-  body.ar-ui .ar-ipsec-config .ar-ipsec-peer { padding: 14px; }
+  .ar-ipsec-config .cbi-value-field > .cbi-input-text,
   .ar-ipsec-config .cbi-value-field > textarea { width: 100%; }
-  .ar-ipsec-config .ar-modal-actions { gap: 8px; }
-  .ar-ipsec-pending { width: 100%; }
+  .ar-ipsec-config .cbi-page-actions { gap: 8px; }
+  .ar-ipsec-pending:not(:empty) { width: 100%; }
 }
 
 .ar-wg-name { flex-wrap: wrap; }

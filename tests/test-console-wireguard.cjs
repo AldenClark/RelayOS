@@ -203,10 +203,11 @@ async function run() {
   const maps=[];
   let removedButtons=0;
   class Section {
-    constructor(map,type,args) { this.map=map; this.options={}; this.sectiontype=type==='named'?args[1]:args[0]; }
+    constructor(map,type,args) { this.map=map; this.options={}; this.children=[]; this.sectiontype=type==='named'?args[1]:args[0]; }
     option(type,name,...args) {
-      const o={ option:name, renderWidget() {} };
+      const o={ option:name, renderWidget() {}, depends() {} };
       if(type==='section') o.subsection=new Section(this.map,'typed',args.slice(1));
+      this.children.push(o);
       this.options[name]=o; return o;
     }
     getOption(name) { return this.options[name]; }

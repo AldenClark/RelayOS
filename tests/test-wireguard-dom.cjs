@@ -82,6 +82,10 @@ modules.ui.addNotification = function(title, content, ...args) {
   return nativeNotice.call(this, title, content, ...args);
 };
 window.L.ui = modules.ui;
+window.L.require = async name => {
+  assert.equal(name, 'ui');
+  return modules.ui;
+};
 modules.form = load('form');
 modules.ui.changes.apply = async confirmed => { applies.push(confirmed); };
 const wg = load('wg-config', path.join(root, 'packages/luci-theme-relay/htdocs/luci-static/resources/relay'));
@@ -132,6 +136,7 @@ async function run() {
     assert.equal(db.network.lan.hostname, undefined);
     assert.equal(modules.uci.get('network', 'lan', 'hostname'), 'unsaved-management-name');
     assert.equal(input('wg0', 'listen_port').value, '51820');
+    assert.equal(document.querySelector('#cbi-relay-wireguard > .cbi-section > h3'), null);
     assert.equal(document.querySelectorAll('.cbi-section-remove').length, 0, 'Created tunnel cannot expose unguarded Delete');
     assert.equal(input('wg0', 'private_key').type, 'password');
     const section = map.children[0], peers = section.getOption('_peers').subsection;
@@ -265,9 +270,28 @@ async function run() {
     await map.parse();
     assert.equal(modules.uci.get('network', finalPeer, 'disabled'), '0', 'Rendering disabled=true must not silently disable a working peer');
     wg.validate(['wg0']);
+    const tunnel = map.children[0];
+    const tunnelToggle = tunnel.getOption('disabled').getUIElement('wg0').node.querySelector('input[type=checkbox]');
+    const key = input('wg0', 'private_key').value;
+    const endpoint = modules.uci.get('network', finalPeer, 'endpoint_host');
+    fill(finalPeer, 'public_key', 'invalid-draft-key');
+    tunnelToggle.click();
+    await flush();
+    for (const name of ['private_key', '_public_key', 'addresses', 'listen_port', '_peers'])
+      assert.equal(tunnel.getOption(name).isActive('wg0'), false, name);
+    assert.equal(tunnel.getOption('_apply').isActive('wg0'), true);
+    await map.parse();
+    assert.equal(modules.uci.get('network', 'wg0', 'private_key'), key);
+    assert.equal(modules.uci.get('network', finalPeer, 'endpoint_host'), endpoint);
+    tunnelToggle.click();
+    await flush();
+    assert.equal(tunnel.getOption('_peers').isActive('wg0'), true);
+    assert.equal(input(finalPeer, 'public_key').value, 'invalid-draft-key');
+    await assert.rejects(map.parse(), /invalid input value/);
     modules.uci.set('network', 'wg0', 'disabled', 'true');
     await mount();
     assert.equal(map.children[0].getOption('disabled').getUIElement('wg0').getValue(), '1', 'netifd disabled=true must render as disabled');
+    assert.equal(map.children[0].getOption('_peers').isActive('wg0'), false);
     await map.parse();
     assert.equal(modules.uci.get('network', 'wg0', 'disabled'), '1', 'An unrelated edit must keep a disabled=true tunnel disabled');
     writeAllowed = false;
