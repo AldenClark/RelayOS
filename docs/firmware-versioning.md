@@ -19,10 +19,9 @@ CI 从实际检出的提交计算版本，同一次提交的 MD、MF、sysupgrad
 | Sysupgrade 文件 | `relayos-20261125-eeb4588834ab-mf-squashfs-sysupgrade.itb` |
 | Recovery 文件 | `relayos-20261125-eeb4588834ab-mf-initramfs-recovery.itb` |
 | GitHub 开发发布标签 | `relayos-20261125-eeb4588834ab-mf-dev.123456789.1` |
-| GitHub 正式发布标签 | `relayos-20261125-eeb4588834ab-mf` |
 
 现有 CI 按板型分开执行，因此标签带 `md` 或 `mf`，两个板型仍共用同一个源码版本。开发发布
-继续标记为 prerelease。验收后手动运行 **Promote RelayOS firmware**，输入开发发布标签。正式发布沿用同一组字节、构建标识和校验和。
+继续标记为 prerelease。
 标签指向完整源码提交，已发布的镜像、标签和校验和保持不可变。同一次开发构建的不同尝试使用各自的标签。
 
 ## 单一来源与兼容性

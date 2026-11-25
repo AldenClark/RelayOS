@@ -245,7 +245,7 @@ Each run builds and releases only the selected device. Releases have tags
 and recovery images, checksums, package manifest, kernel/build configuration,
 pinned feeds and source provenance. The other model need not be built or pass.
 See the [firmware versioning](docs/firmware-versioning.md) for device versions,
-artifact names and promotion of verified prereleases.
+artifact names and prerelease tags.
 All JavaScript actions use native Node.js 24 runtimes. Optional packages
 needed for upstream dependency metadata are registered selectively in the
 build tree, not installed into the firmware; configuration and manifest
