@@ -31,6 +31,7 @@ for feature in \
     CONFIG_PACKAGE_strongswan-mod-socket-default \
     CONFIG_PACKAGE_strongswan-mod-vici \
     CONFIG_PACKAGE_strongswan-mod-aes \
+    CONFIG_PACKAGE_strongswan-mod-sha1 \
     CONFIG_PACKAGE_strongswan-mod-sha2 \
     CONFIG_PACKAGE_strongswan-mod-hmac \
     CONFIG_PACKAGE_strongswan-mod-kdf \

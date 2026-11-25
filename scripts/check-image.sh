@@ -27,6 +27,7 @@ for name in relay-ipsec \
             strongswan-mod-socket-default \
             strongswan-mod-vici \
             strongswan-mod-aes \
+            strongswan-mod-sha1 \
             strongswan-mod-sha2 \
             strongswan-mod-hmac \
             strongswan-mod-kdf \

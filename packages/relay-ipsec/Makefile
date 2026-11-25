@@ -3,7 +3,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=relay-ipsec
 PKG_VERSION:=1
-PKG_RELEASE:=4
+PKG_RELEASE:=5
 PKG_LICENSE:=Apache-2.0
 include $(INCLUDE_DIR)/package.mk
 
@@ -15,7 +15,7 @@ define Package/relay-ipsec
   PKGARCH:=all
   DEPENDS:=+strongswan +strongswan-charon +strongswan-swanctl \
     +strongswan-mod-kernel-netlink +strongswan-mod-socket-default +strongswan-mod-vici \
-    +strongswan-mod-aes +strongswan-mod-sha2 +strongswan-mod-hmac +strongswan-mod-kdf \
+    +strongswan-mod-aes +strongswan-mod-sha1 +strongswan-mod-sha2 +strongswan-mod-hmac +strongswan-mod-kdf \
     +strongswan-mod-random +strongswan-mod-drbg +strongswan-mod-curve25519 \
     +strongswan-mod-gcm +strongswan-mod-gmp \
     +kmod-ipsec +kmod-ipsec4 +kmod-xfrm-interface +kmod-crypto-hw-eip93 \
