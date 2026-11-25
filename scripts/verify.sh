@@ -2,6 +2,8 @@
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 require_source
+source "$product_root/scripts/version.sh"
+load_build_identity
 "$product_root/scripts/check-kernel-config.sh" "$device"
 "$product_root/scripts/check-image.sh" "$device"
 tmp="$(mktemp -d)"
@@ -40,12 +42,18 @@ sysupgrade="$target_dir/$image_prefix-squashfs-sysupgrade.itb"
 recovery="$target_dir/$image_prefix-initramfs-recovery.itb"
 check_fit "$sysupgrade"
 check_fit "$recovery"
+shopt -s nullglob
+rootfs_release=("$ow"/build_dir/target-*/root-airoha/etc/openwrt_release)
+[[ ${#rootfs_release[@]} -eq 1 ]] || die "Expected one prepared Airoha rootfs release file"
+grep -Fxq "DISTRIB_RELEASE='$firmware_version'" "${rootfs_release[0]}" ||
+    die "Prepared firmware rootfs does not match the firmware version"
 "$ow/staging_dir/host/bin/fwtool" -q -i "$tmp/metadata.json" "$sysupgrade"
-python3 - "$tmp/metadata.json" "$board" <<'PY'
+python3 - "$tmp/metadata.json" "$board" "$firmware_version" <<'PY'
 import json, sys
 with open(sys.argv[1]) as f:
     meta = json.load(f)
 assert meta.get("version", {}).get("dist") == "RelayOS", "Incorrect firmware branding"
+assert meta.get("version", {}).get("version") == sys.argv[3], "Incorrect firmware version"
 assert sys.argv[2] in meta.get("supported_devices", []), "Missing board ID"
 assert meta.get("compat_version") == "1.0", "UBI upgrade compatibility changed"
 PY

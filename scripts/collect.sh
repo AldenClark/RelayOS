@@ -2,6 +2,8 @@
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 require_source
+source "$product_root/scripts/version.sh"
+load_build_identity
 # Called only after verify.sh passes.
 [[ ! -e "$artifact_dir" ]] || die "Artifact directory already exists"
 mkdir -p "$artifact_dir"
@@ -10,14 +12,15 @@ manifests=("$target_dir"/relayos-airoha-"$subtarget"*.manifest)
 [[ ${#manifests[@]} -eq 1 ]] || die "Expected exactly one profile manifest"
 kconfigs=("$ow"/build_dir/target-*/linux-airoha_"$subtarget"/linux-*/.config)
 [[ ${#kconfigs[@]} -eq 1 ]] || die "Expected exactly one kernel config"
-cp "$target_dir/$image_prefix-squashfs-sysupgrade.itb" \
-   "$target_dir/$image_prefix-initramfs-recovery.itb" "$artifact_dir/"
+for image in squashfs-sysupgrade initramfs-recovery; do
+    cp "$target_dir/$image_prefix-$image.itb" "$artifact_dir/relayos-$firmware_version-$device-$image.itb"
+done
 cp "${manifests[0]}" "$artifact_dir/relayos-$device.manifest"
 cp "$ow/.config" "$artifact_dir/relayos-$device.config.buildinfo"
 cp "${kconfigs[0]}" "$artifact_dir/relayos-$device.kernel.config"
 cp "$product_root/feeds.conf" "$artifact_dir/relayos-$device.feeds.buildinfo"
 {
-    printf 'product_commit=%s\n' "$(git -C "$product_root" rev-parse HEAD)"
+    cat "$identity_file"
     printf 'openwrt_source=%s\n' "$source_url"
     printf 'openwrt_commit=%s\n' "$source_sha"
     printf 'device=%s\nboard=%s\n' "$device" "$board"

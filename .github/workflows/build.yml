@@ -38,6 +38,8 @@ jobs:
     timeout-minutes: 360
     outputs:
       artifact_id: ${{ steps.firmware_artifact.outputs.artifact-id }}
+      firmware_version: ${{ steps.identity.outputs.version }}
+      build_id: ${{ steps.identity.outputs.build_id }}
     steps:
       - name: Check out private RelayOS product source
         uses: actions/checkout@v6
@@ -59,13 +61,20 @@ jobs:
           df -h .
 
       - name: Test official-only source policy (offline)
-        run: bash tests/test-upstream-source.sh
+        run: |
+          bash tests/test-upstream-source.sh
+          bash tests/test-firmware-version.sh
 
       - name: Prepare locked OpenWrt and product feed
         run: scripts/prepare.sh "$DEVICE"
 
       - name: Verify native single-profile configuration and kernel fragment
         run: scripts/configure.sh "$DEVICE"
+
+      - name: Record firmware version
+        id: identity
+        run: |
+          sed -n -e 's/^firmware_version=/version=/p' -e '/^build_id=/p' "work/$DEVICE/firmware.buildinfo" >> "$GITHUB_OUTPUT"
 
       - name: Run console regression tests
         run: scripts/test-console.sh "$DEVICE"
@@ -122,7 +131,7 @@ jobs:
         if: inputs.mode == 'firmware'
         uses: actions/upload-artifact@v7
         with:
-          name: relayos-build-${{ inputs.device }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: relayos-${{ steps.identity.outputs.version }}-${{ inputs.device }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/${{ inputs.device }}/
           if-no-files-found: error
           retention-days: 7
@@ -134,7 +143,15 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+    env:
+      FIRMWARE_VERSION: ${{ needs.firmware.outputs.firmware_version }}
+      BUILD_ID: ${{ needs.firmware.outputs.build_id }}
     steps:
+      - name: Check out the release validation script
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
       - name: Download selected device output
         uses: actions/download-artifact@v7
         with:
@@ -143,23 +160,7 @@ jobs:
           merge-multiple: true
 
       - name: Confirm complete and consistent release set
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd release-input
-          prefix="relayos-airoha-$SUBTARGET-nokia_xg-040g-$DEVICE-ubi"
-          test -s "$prefix-squashfs-sysupgrade.itb"
-          test -s "$prefix-initramfs-recovery.itb"
-          for suffix in manifest config.buildinfo kernel.config feeds.buildinfo source.buildinfo; do
-            test -s "relayos-$DEVICE.$suffix"
-          done
-          grep -Fx "product_commit=$GITHUB_SHA" "relayos-$DEVICE.source.buildinfo"
-          grep -Fx "openwrt_source=https://github.com/openwrt/openwrt.git" "relayos-$DEVICE.source.buildinfo"
-          grep -Fx "device=$DEVICE" "relayos-$DEVICE.source.buildinfo"
-          grep -Fx "board=nokia,xg-040g-$DEVICE-ubi" "relayos-$DEVICE.source.buildinfo"
-          sha256sum -c "RELAYOS-$DEVICE-SHA256SUMS"
-          # Never include the other model or unrelated artifacts in a release.
-          test "$(find . -maxdepth 1 -type f | wc -l)" -eq 8
+        run: scripts/check-release.sh release-input "$DEVICE" "$FIRMWARE_VERSION" "$GITHUB_SHA" "$BUILD_ID"
 
       - name: Create immutable development prerelease
         shell: bash
@@ -167,11 +168,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          tag="relayos-dev-$DEVICE-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          tag="relayos-$FIRMWARE_VERSION-$DEVICE-dev.$BUILD_ID"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$tag" --jq "[.[] | select(.ref == \"refs/tags/$tag\")] | length")" = 0
           upstream="$(sed -n 's/^openwrt_commit=//p' "release-input/relayos-$DEVICE.source.buildinfo")"
           gh release create "$tag" release-input/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "RelayOS ${{ inputs.device }} (${{ env.SUBTARGET }}) #${{ github.run_number }}" \
+            --title "RelayOS $FIRMWARE_VERSION ($DEVICE) · development" \
             --notes "Nokia XG-040G-$DEVICE ($SUBTARGET), UBI boot layout ONLY. Kernel WireGuard, copper Ethernet, no PON. Source: $GITHUB_SHA; OpenWrt: https://github.com/openwrt/openwrt/commit/$upstream. Hardware acceptance is separate from build verification." \
             --prerelease

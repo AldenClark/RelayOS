@@ -5,7 +5,8 @@ stage="${2:-all}"
 set -- "$1"
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 require_source
-[[ -s "$ow/.config" ]] || die "Run scripts/configure.sh $device first"
+source "$product_root/scripts/version.sh"
+load_build_identity
 jobs="${RELAYOS_JOBS:-2}"
 [[ "$jobs" =~ ^[1-9][0-9]*$ ]] || die "RELAYOS_JOBS must be a positive integer"
 logs="$product_root/work/$device/build-logs"

@@ -1,9 +1,9 @@
-# RelayOS 固件版本号方案
+# RelayOS 固件版本号
 
 ## 版本与构建标识
 
-固件版本采用 `YYYY.MM.DD-g<12 位 Git SHA>`，例如
-`2026.11.25-geeb4588834ab`。日期取 **RelayOS 源码提交的 committer date**，统一转换成 UTC。
+固件版本采用 `YYYYMMDD-<12 位 Git SHA>`，例如
+`20261125-eeb4588834ab`。日期取 **RelayOS 源码提交的 committer date**，统一转换成 UTC。
 CI 从实际检出的提交计算版本，同一次提交的 MD、MF、sysupgrade、recovery 和重复构建共用版本。
 日期用于识别发布时期。同一天的提交通过 Git SHA 区分，先后次序以 Git 提交关系或发布记录为准。
 
@@ -15,14 +15,14 @@ CI 从实际检出的提交计算版本，同一次提交的 MD、MF、sysupgrad
 
 | 位置 | 示例 |
 | --- | --- |
-| 设备页面与 OpenWrt 版本字段 | `RelayOS 2026.11.25-geeb4588834ab` |
-| Sysupgrade 文件 | `relayos-2026.11.25-geeb4588834ab-mf-squashfs-sysupgrade.itb` |
-| Recovery 文件 | `relayos-2026.11.25-geeb4588834ab-mf-initramfs-recovery.itb` |
-| GitHub 开发发布标签 | `relayos-2026.11.25-geeb4588834ab-mf-dev.123456789.1` |
-| GitHub 正式发布标签 | `relayos-2026.11.25-geeb4588834ab-mf` |
+| 设备页面与 OpenWrt 版本字段 | `RelayOS 20261125-eeb4588834ab` |
+| Sysupgrade 文件 | `relayos-20261125-eeb4588834ab-mf-squashfs-sysupgrade.itb` |
+| Recovery 文件 | `relayos-20261125-eeb4588834ab-mf-initramfs-recovery.itb` |
+| GitHub 开发发布标签 | `relayos-20261125-eeb4588834ab-mf-dev.123456789.1` |
+| GitHub 正式发布标签 | `relayos-20261125-eeb4588834ab-mf` |
 
 现有 CI 按板型分开执行，因此标签带 `md` 或 `mf`，两个板型仍共用同一个源码版本。开发发布
-继续标记为 prerelease。正式发布推广已验收的同一组字节，保留原构建标识和校验和。
+继续标记为 prerelease。验收后手动运行 **Promote RelayOS firmware**，输入开发发布标签。正式发布沿用同一组字节、构建标识和校验和。
 标签指向完整源码提交，已发布的镜像、标签和校验和保持不可变。同一次开发构建的不同尝试使用各自的标签。
 
 ## 单一来源与兼容性

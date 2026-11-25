@@ -241,11 +241,11 @@ select **md** (AN7581) or **mf** (AN7583) and the mode:
 
 Select **Actions → RelayOS (MD / MF) → Run workflow**, branch main.
 Each run builds and releases only the selected device. Releases have tags
-`relayos-dev-<device>-<run_id>-<run_attempt>` and include both UBI sysupgrade
+`relayos-<YYYYMMDD>-<sha12>-<device>-dev.<run_id>.<run_attempt>` and include both UBI sysupgrade
 and recovery images, checksums, package manifest, kernel/build configuration,
 pinned feeds and source provenance. The other model need not be built or pass.
-See the [firmware versioning proposal](docs/firmware-versioning.md) for the
-planned date-and-commit identifiers.
+See the [firmware versioning](docs/firmware-versioning.md) for device versions,
+artifact names and promotion of verified prereleases.
 All JavaScript actions use native Node.js 24 runtimes. Optional packages
 needed for upstream dependency metadata are registered selectively in the
 build tree, not installed into the firmware; configuration and manifest

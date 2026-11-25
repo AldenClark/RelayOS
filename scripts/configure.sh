@@ -2,15 +2,19 @@
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 require_source
+source "$product_root/scripts/version.sh"
 case "$device" in md) pcie_phy=PHY_AIROHA_PCIE ;; mf) pcie_phy=PHY_AIROHA_AN7583_PCIE ;; esac
 cd "$ow"
 [[ ! -e .config && ! -e files && ! -e env/kernel-config ]] || die "Refusing to overwrite existing build configuration"
 [[ -e package/feeds/relayos/luci-theme-relay/Makefile ]] || die "Local product feed not installed"
+write_build_identity
 cat "$product_root/configs/common.config" "$product_root/configs/$device.config" > .config
+printf 'CONFIG_VERSION_NUMBER="%s"\n' "$firmware_version" >> .config
 mkdir -p env files
 cat "$product_root/configs/kernel/common.config" "$product_root/configs/kernel/$device.config" > env/kernel-config
 cp -a "$product_root/overlay/." files/
 make defconfig
+load_build_identity
 
 # Check resolved OpenWrt metadata, not only the requested config fragments.
 for feature in \
