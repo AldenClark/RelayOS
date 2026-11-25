@@ -567,7 +567,10 @@ async function render(options = {}) {
   };
   const node = await map.render();
   const update = () => node.isConnected ? refresh(node) : poll.remove(update);
-  poll.add(update, 10);
+  // LuCI can run a poll immediately, before its view attaches this map.
+  requestAnimationFrame(() => {
+    if (node.isConnected) poll.add(update, 10);
+  });
   return E('section', { class: 'ar-wg-editor' }, node);
 }
 

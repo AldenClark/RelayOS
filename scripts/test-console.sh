@@ -11,6 +11,8 @@ for script in "$console/root/etc/uci-defaults/95_luci-theme-relay" \
               "$console/root/etc/init.d/relay-traffic" \
               "$console/root/usr/libexec/relay-traffic" \
               "$console/root/usr/libexec/relay-wg-restart" \
+              "$product_root/overlay/etc/init.d/relay-wg-endpoints" \
+              "$product_root/overlay/usr/libexec/relay-wg-endpoints" \
               "$product_root/overlay/etc/uci-defaults/98-relay-retire-ipsec" \
               "$product_root/overlay/etc/uci-defaults/99-airrelay-network"; do
     sh -n "$script"

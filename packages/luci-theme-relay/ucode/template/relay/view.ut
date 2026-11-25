@@ -1,0 +1,18 @@
+{# SPDX-License-Identifier: Apache-2.0 -#}
+{%
+    import { glob, readfile } from 'fs';
+    import { sha256 } from 'digest';
+
+    // Images built against the same OpenWrt revision can share the package
+    // database timestamp. Include our asset content in LuCI's cache key.
+    const root = '/www/luci-static';
+    const files = glob(root + '/resources/relay/*.js', root + '/resources/view/relay/*.js');
+    push(files, root + '/relay/cascade.css');
+    sort(files);
+    const revision = substr(sha256(join('', map(files, path => sha256(readfile(path) ?? '')))), 0, 16);
+    include('view', {
+        view: dispatched.action.view,
+        pkgs_update_time: pkgs_update_time + '-' + revision,
+        relay_asset_revision: revision
+    });
+-%}

@@ -6,8 +6,22 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const resources = path.resolve(__dirname,
-  '../packages/luci-theme-relay/htdocs/luci-static/resources');
+const pkg = path.resolve(__dirname, '../packages/luci-theme-relay');
+const resources = path.join(pkg, 'htdocs/luci-static/resources');
+
+const menu = JSON.parse(fs.readFileSync(path.join(pkg, 'root/usr/share/luci/menu.d/relay-console.json'), 'utf8'));
+for (const name of ['overview', 'settings', 'agent']) {
+  const { action } = menu[`admin/relay/${name}`];
+  assert.deepEqual(action, { type: 'template', path: 'relay/view', view: `relay/${name}` });
+  assert.ok(fs.existsSync(path.join(pkg, `ucode/template/${action.path}.ut`)));
+}
+for (const dir of ['relay', 'view/relay']) {
+  for (const file of fs.readdirSync(path.join(resources, dir)).filter(file => file.endsWith('.js'))) {
+    const source = fs.readFileSync(path.join(resources, dir, file), 'utf8');
+    for (const [, dependency] of source.matchAll(/^['"]require (relay\.[\w.-]+)(?: as \w+)?['"];?$/gm))
+      assert.ok(fs.existsSync(path.join(resources, dependency.replaceAll('.', '/') + '.js')), `${file}: missing ${dependency}`);
+  }
+}
 
 function BaseClass() {}
 BaseClass.extend = function(properties) {

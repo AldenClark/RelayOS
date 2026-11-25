@@ -9,7 +9,7 @@ const notifications = [];
 const dependencies = {
   baseclass: { extend: value => value }, _: value => value, form: {}, ui: { createHandlerFn: (_context, fn) => fn, addNotification: (_title, content) => notifications.push(content) },
   L: { hasViewPermission: () => true }, E: (tag,attrs,children) => ({tag,attrs,children}),
-  poll: { add() {}, remove() {} },
+  poll: { add() {}, remove() {} }, requestAnimationFrame() {},
   rpc: { declare: spec => (...args) => spec.object === 'rc'
     ? (serviceError ? Promise.reject(serviceError) : Promise.resolve(serviceState))
     : spec.object === 'session' ? Promise.resolve(writeAllowed)

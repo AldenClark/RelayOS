@@ -65,7 +65,13 @@ const modules = {
     return {};
   } },
   request: {}, session: { getLocalData: () => null, setLocalData() {} },
-  poll: { add(fn) { updateStatus = fn; }, remove() {} }, fs: {},
+  poll: {
+    add(fn) {
+      assert.ok(document.querySelector('#cbi-relay-wireguard')?.isConnected, 'Register polling after LuCI attaches the view');
+      updateStatus = fn;
+    },
+    remove() {}
+  }, fs: {},
   agentState: { assertManual: async () => { if (managed) throw new Error('Agent managed'); } }
 };
 function load(name, dir = luci) {

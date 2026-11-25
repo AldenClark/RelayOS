@@ -11,6 +11,12 @@ case "$(board_name)" in
 		;;
 esac
 
+# OpenWrt restores preserved configuration before running uci-defaults.
+# The restore archive is still present here and is removed by init.d/done.
+if [ -f /sysupgrade.tgz ] || [ -f /tmp/sysupgrade.tar ]; then
+	exit 0
+fi
+
 # Keep the stock board's lan1..lan4 bridge but obtain its management IP via DHCP.
 # Deliberately do not offer DHCP to the upstream LAN.
 uci -q get network.lan >/dev/null || exit 1

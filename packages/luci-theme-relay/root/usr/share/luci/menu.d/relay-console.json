@@ -17,8 +17,9 @@
     "title": "Live status",
     "order": 1,
     "action": {
-      "type": "view",
-      "path": "relay/overview"
+      "type": "template",
+      "path": "relay/view",
+      "view": "relay/overview"
     },
     "depends": {
       "acl": [
@@ -30,8 +31,9 @@
     "title": "AirRoute Agent",
     "order": 4,
     "action": {
-      "type": "view",
-      "path": "relay/agent"
+      "type": "template",
+      "path": "relay/view",
+      "view": "relay/agent"
     },
     "depends": {
       "acl": [
@@ -46,8 +48,9 @@
     "title": "Settings",
     "order": 2,
     "action": {
-      "type": "view",
-      "path": "relay/settings"
+      "type": "template",
+      "path": "relay/view",
+      "view": "relay/settings"
     },
     "depends": {
       "acl": [
