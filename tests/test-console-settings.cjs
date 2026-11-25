@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const root = path.resolve(__dirname, '../packages/luci-theme-relay/htdocs/luci-static/resources');
-let db, calls, permissions, modal, current, statusError, managed, prepareError, captured, pending, notifications;
+let db, calls, permissions, modal, managed, prepareError, captured, pending, notifications;
 let readonlyView = false;
 const document = { body: { classList: { contains: name => name === 'modal-overlay-active' && modal } } };
 const L = { hasViewPermission: () => !readonlyView };
@@ -35,8 +35,9 @@ const wgConfig = {
     options.onMap(map);
     return E('section');
   },
-  async prepare(map, routes, ports) {
-    calls.push('wireguard.prepare'); captured.routes = routes; captured.ports = ports;
+  async prepare(map) {
+    assert.equal(map.kind, 'wireguard');
+    calls.push('wireguard.prepare');
     await agentState.assertManual();
     if (!permissions.network || !permissions.firewall) throw new Error('WireGuard settings are read-only.');
     if (prepareError) throw prepareError;
@@ -51,10 +52,6 @@ class Map {
   async renderContents() { calls.push(this.kind + '.render'); return E('div'); }
   async render() { return E('div'); }
 }
-const ipsec = {
-  async status() { calls.push('ipsec.status'); if (statusError) throw statusError; return current; },
-  render(_state, _agent, _readonly, coordination) { captured.ipsec = coordination; return E('section'); }
-};
 const ui = {
   // The actual pinned LuCI apply API shows a synchronous modal and returns
   // undefined; it does not return its internal apply/confirmation promise.
@@ -63,13 +60,13 @@ const ui = {
   addNotification: (title, content) => { notifications.push({ title, content }); }
 };
 const settings = load('view/relay/settings.js', { view: { extend: value => value }, form: { Map }, uci, ui, rpc,
-  systemManager: { render: () => E('section') }, agentState, wgConfig, ipsec, L, E, document, _: value => value });
+  systemManager: { render: () => E('section') }, agentState, wgConfig, L, E, document, _: value => value });
 
 async function reset() {
   db = { network: { lan: { '.type': 'interface', proto: 'dhcp' } } };
   calls = []; captured = {}; pending = {}; notifications = []; permissions = { network: true, firewall: true };
-  modal = false; statusError = null; prepareError = null; managed = false; readonlyView = false;
-  current = { enabled: false, peers: [] }; settings._networkBusy = false; settings._networkNeedsReload = false;
+  modal = false; prepareError = null; managed = false; readonlyView = false;
+  settings._networkBusy = false; settings._networkNeedsReload = false;
   const data = await settings.load(); await settings.render(data); calls = [];
 }
 async function noSave(operation, pattern) {
@@ -80,18 +77,14 @@ async function noSave(operation, pattern) {
 
 async function run() {
   await reset();
-  assert.equal(captured.wg.coordination, captured.ipsec, 'Every mutating editor must share the same gate');
-  current = { enabled: true, peers: [ { enabled: false, local_address: '10.78.1.2/32', remote_subnets: [ '10.78.1.1/32' ] } ] };
   await captured.wg.onApply();
   assert.deepEqual(calls, [ 'network.depends', 'network.parse', 'wireguard.depends', 'wireguard.parse',
-    'ipsec.status', 'wireguard.prepare', 'uci.save', 'network.load', 'network.render',
+    'wireguard.prepare', 'uci.save', 'network.load', 'network.render',
     'wireguard.load', 'wireguard.render', 'native.apply' ]);
-  assert.deepEqual(captured.routes, [ '10.78.1.2/32', '10.78.1.1/32' ], 'Include disabled IPsec protected routes');
-  assert.deepEqual(captured.ports, [ 500, 4500 ]);
   assert.equal(settings._networkBusy, false);
-  await assert.rejects(captured.ipsec.run(async () => { throw new Error('Must not start during native apply'); }), /Another network operation/);
+  await assert.rejects(captured.wg.coordination.run(async () => { throw new Error('Must not start during native apply'); }), /Another network operation/);
   modal = false;
-  assert.equal(await captured.ipsec.run(async () => 'after cancel or completion'), 'after cancel or completion');
+  assert.equal(await captured.wg.coordination.run(async () => 'after cancel or completion'), 'after cancel or completion');
 
   await reset();
   settings._wireguardMap.parseError = new Error('Incomplete peer draft');
@@ -128,20 +121,14 @@ async function run() {
 
   await reset();
   let release;
-  const waiting = captured.ipsec.run(() => new Promise(resolve => { release = resolve; }));
+  const waiting = captured.wg.coordination.run(() => new Promise(resolve => { release = resolve; }));
   await noSave(settings.handleApply(), /Another network operation/);
   await assert.rejects(captured.wg.coordination.run(async () => { throw new Error('Must not add a peer'); }), /Another network operation/);
   release(); await waiting;
   assert.equal(settings._networkBusy, false);
-  await assert.rejects(captured.ipsec.run(async () => { throw new Error('Failed IPsec apply'); }), /Failed IPsec apply/);
+  await assert.rejects(captured.wg.coordination.run(async () => { throw new Error('Failed draft operation'); }), /Failed draft operation/);
   assert.equal(settings._networkBusy, false, 'Failed operations release the gate');
 
-  await reset(); statusError = new Error('Current IPsec status unavailable');
-  await noSave(settings.handleApply(), /Current IPsec status unavailable/);
-  await reset();
-  db.network.lan = { '.type': 'interface', proto: 'static', ipaddr: '10.78.1.200', netmask: '255.255.255.0' };
-  current.peers = [ { enabled: false, local_address: '10.78.1.2/32', remote_subnets: [ '10.78.1.1/32' ] } ];
-  await noSave(settings.handleApply(), /management subnet conflicts/);
   await reset();
   db.network.lan = { '.type': 'interface', proto: 'static', ipaddr: '10.77.0.200', netmask: '255.255.255.0' };
   db.network.wg0 = { '.type': 'interface', proto: 'wireguard', addresses: [ '10.77.0.2/32' ] };
@@ -158,7 +145,6 @@ async function run() {
   db.network.lan = { '.type': 'interface', proto: 'static', ipaddr: '192.168.1.20', netmask: '255.255.255.0' };
   await settings.handleApply();
   assert.ok(calls.includes('native.apply'));
-  assert.deepEqual(captured.ports, [], 'Disabled IPsec does not reserve listener ports');
   console.log('RelayOS Settings: shared form validation, fresh tunnel conflicts, ACL and native apply modal coordination OK');
 }
 run().catch(error => { console.error(error); process.exitCode = 1; });

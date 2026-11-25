@@ -1,5 +1,7 @@
 # WireGuard / IPsec 控制与 UI 审计
 
+> 历史记录。文中涉及的旧 VPN 实现及测试已随产品精简移除，现行行为以 README 为准。
+
 日期：2026-11-25（北京时间）。审计基线：`c21935a35eb12b9bc1bb4ba365b1c2bb8dca7aee`。
 
 本次覆盖 LuCI 编辑器、管理网络与隧道的保存关系、UCI/RPC 权限、Agent 所有权、

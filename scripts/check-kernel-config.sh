@@ -13,7 +13,8 @@ configs=("$ow"/build_dir/target-*/linux-airoha_"$subtarget"/linux-*/.config)
 }
 kernel_config="${configs[0]}"
 
-for feature in EXT4_FS MMC USB_SUPPORT USB DEBUG_INFO PCI PCIE_MEDIATEK PCIE_MEDIATEK_GEN3 SWAP MPTCP "$usb_phy" "$pcie_phy"; do
+for feature in EXT4_FS MMC USB_SUPPORT USB DEBUG_INFO PCI PCIE_MEDIATEK PCIE_MEDIATEK_GEN3 SWAP MPTCP XFRM XFRM_USER XFRM_INTERFACE INET_ESP INET6_ESP INET_AH INET6_AH \
+    CRYPTO_DEV_EIP93 CRYPTO_AES_ARM64_CE CRYPTO_AES_ARM64_CE_BLK CRYPTO_GHASH_ARM64_CE "$usb_phy" "$pcie_phy"; do
     # Kconfig omits symbols that are unavailable on this target. An absent
     # symbol is disabled, just like "# CONFIG_FOO is not set". Only explicit
     # y/m selections prove an unwanted feature was built.
@@ -29,11 +30,6 @@ for feature in MTD_UBI UBIFS_FS NET_AIROHA NET_AIROHA_NPU NET_DSA PCS_AIROHA HW_
         exit 1
     }
 done
-for feature in WIREGUARD XFRM_USER INET_ESP XFRM_INTERFACE CRYPTO_DEV_EIP93; do
-    grep -Eq "^CONFIG_${feature}=(y|m)$" "$kernel_config" || die "Kernel missing required data-plane feature: $feature"
-done
-for feature in CRYPTO_AES_ARM64_CE CRYPTO_AES_ARM64_CE_BLK CRYPTO_GHASH_ARM64_CE; do
-    grep -qx "CONFIG_${feature}=m" "$kernel_config" || die "Kernel missing required Airoha crypto module: CONFIG_$feature"
-done
+grep -Eq '^CONFIG_WIREGUARD=(y|m)$' "$kernel_config" || die "Kernel missing WireGuard"
 
 echo "RelayOS $subtarget optimized kernel config verified."

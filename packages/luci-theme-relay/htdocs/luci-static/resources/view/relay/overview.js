@@ -11,20 +11,20 @@ const callInfo = rpc.declare({ object: 'system', method: 'info', expect: { '': {
 const callInterfaces = rpc.declare({ object: 'network.interface', method: 'dump', expect: { interface: [] } });
 const callPort = rpc.declare({ object: 'network.device', method: 'status', params: ['name'], expect: { '': {} } });
 const ports = ['lan1', 'lan2', 'lan3', 'lan4'];
+const historyPath = '/tmp/relay-traffic/history';
 
 function safe(promise, fallback) {
   return L.resolveDefault(promise, fallback);
 }
 
-function snapshot() {
+function snapshot(permissions) {
   return Promise.all([
     safe(callInfo(), {}),
     safe(callInterfaces(), []),
     safe(callPort('br-lan'), {}),
-    safe(fs.read('/tmp/relay-traffic/history'), ''),
     ...ports.map(name => safe(callPort(name), {}))
-  ]).then(async ([info, interfaces, bridge, history, ...states]) =>
-    [info, interfaces, bridge, history, await wireguard.snapshot(interfaces), ...states]);
+  ]).then(async ([info, interfaces, bridge, ...states]) =>
+    [info, interfaces, bridge, await wireguard.snapshot(interfaces, permissions), ...states]);
 }
 
 function humanUptime(value) {
@@ -74,10 +74,11 @@ function infoLine(label, key) {
 
 return view.extend({
   load() {
-    return Promise.all([safe(callBoard(), {}), snapshot()]);
+    this._restartPermissions = new Map();
+    return Promise.all([safe(callBoard(), {}), snapshot(this._restartPermissions), safe(fs.read(historyPath), '')]);
   },
 
-  render([board, data]) {
+  render([board, data, historyText]) {
     const page = E('div', { class: 'ar-dashboard' }, [
       E('div', { class: 'ar-page-heading' }, [
         E('div', {}, [
@@ -122,17 +123,32 @@ return view.extend({
 
     this._board = board || {};
     this._trafficSample = traffic.tracker();
-    this.updateSnapshot(page, data);
-    poll.add(() => snapshot().then(data => this.updateSnapshot(page, data)), 5);
+    this.updateSnapshot(page, data, historyText);
+    const loadedAt = performance.now();
+    const refresh = () => page.isConnected
+      ? snapshot(this._restartPermissions).then(data => this.updateSnapshot(page, data, historyText))
+      : poll.remove(refresh);
+    const refreshHistory = async () => {
+      if (!page.isConnected) return poll.remove(refreshHistory);
+      if (performance.now() - loadedAt < 5000) return;
+      historyText = await safe(fs.read(historyPath), historyText);
+    };
+    // LuCI may run the first poll synchronously. Wait until it mounts this view.
+    requestAnimationFrame(() => {
+      if (!page.isConnected) return;
+      poll.add(refresh, 5);
+      // The on-device collector writes only once every 15 seconds.
+      poll.add(refreshHistory, 15);
+    });
 
     return page;
   },
 
-  updateSnapshot(page, data) {
+  updateSnapshot(page, data, historyText) {
     if (!page.isConnected && this._initialized)
       return;
 
-    const [info, interfaces, bridge, historyText, tunnels, ...portStates] = data;
+    const [info, interfaces, bridge, tunnels, ...portStates] = data;
     const all = Array.isArray(interfaces) ? interfaces : [];
     const lan = all.find(i => i.interface === 'lan') || {};
     const memory = info?.memory || {};

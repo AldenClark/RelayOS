@@ -9,14 +9,23 @@ const restartPath = '/usr/libexec/relay-wg-restart';
 const canExecute = rpc.declare({ object: 'session', method: 'access', params: [ 'scope', 'object', 'function' ], expect: { access: false } });
 const callDevice = rpc.declare({ object: 'network.device', method: 'status', params: [ 'name' ], expect: { '': {} } });
 
-async function snapshot(all) {
+function restartAllowed(name) {
+  return L.resolveDefault(canExecute('file', restartPath + ' ' + name, 'exec'), false);
+}
+
+async function snapshot(all, permissions) {
   const links = (Array.isArray(all) ? all : []).filter(i => i.proto === 'wireguard');
-  const states = await Promise.all(links.map(async link => ({
-    link,
-    state: await L.resolveDefault(callDevice(link.l3_device || link.device || link.interface), {}),
-    canRestart: await L.resolveDefault(canExecute('file', restartPath + ' ' + link.interface, 'exec'), false)
-  })));
-  return states;
+  for (const name of permissions.keys())
+    if (!links.some(link => link.interface === name)) permissions.delete(name);
+  return Promise.all(links.map(async link => {
+    const name = link.interface;
+    if (!permissions.has(name)) permissions.set(name, restartAllowed(name));
+    const [state, canRestart] = await Promise.all([
+      L.resolveDefault(callDevice(link.l3_device || link.device || name), {}),
+      permissions.get(name)
+    ]);
+    return { link, state, canRestart };
+  }));
 }
 
 function field(label, content) {
@@ -32,6 +41,8 @@ return baseclass.extend({
     if (this._restarting.has(name)) return;
     this._restarting.add(name);
     try {
+      if (!await restartAllowed(name))
+        throw new Error(_('Tunnel restart failed.'));
       const result = await fs.exec(restartPath, [ name ]);
       if (result.code !== 0) throw new Error(result.stderr || _('Tunnel restart failed.'));
       this._traffic(name, {});

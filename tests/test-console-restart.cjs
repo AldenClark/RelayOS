@@ -48,23 +48,43 @@ esac
 } finally {fs.rmSync(tmp,{recursive:true,force:true});}
 async function frontend() {
   const calls=[],notifications=[],samples=[];
+  let allowed=true, permissionChecks=0;
   let resolveCommand;
   const source=fs.readFileSync(path.join(pkg,'htdocs/luci-static/resources/relay/wireguard.js'),'utf8');
-  const mod=new Function('baseclass','rpc','fs','ui','traffic','E','_',source)(
-    {extend:x=>x},{declare:()=>()=>Promise.resolve({})},
+  const mod=new Function('baseclass','rpc','fs','ui','traffic','E','_','L',source)(
+    {extend:x=>x},{declare:spec=>async()=>{
+      if (spec.method === 'access') { permissionChecks++; return allowed; }
+      return {};
+    }},
     {exec:(program,args)=>{calls.push([program,args]);return new Promise(resolve=>{resolveCommand=resolve;});}},
-    {addNotification:(_title,content)=>notifications.push(content)}, {}, (tag,attrs,child)=>({tag,attrs,child}),x=>x);
-  mod._interfaces=[{link:{interface:'wg',proto:'wireguard'},canRestart:true}];
+    {addNotification:(_title,content)=>notifications.push(content)}, {}, (tag,attrs,child)=>({tag,attrs,child}),x=>x,
+    {resolveDefault:(promise,fallback)=>promise.catch(()=>fallback)});
+  const wg = {interface:'wg',proto:'wireguard'};
+  const permissions = new Map();
+  await mod.snapshot([wg], permissions);
+  mod._interfaces=await mod.snapshot([wg], permissions);
+  assert.equal(permissionChecks,1);
+  await mod.snapshot([], permissions);
+  await mod.snapshot([wg], permissions);
+  assert.equal(permissionChecks,2, 'A newly seen interface must fetch its ACL');
   mod._restarting=new Set(); mod._traffic=(name,state)=>samples.push([name,state]);
   const first=mod.restart('wg');
-  await mod.restart('wg'); assert.equal(calls.length,1);
+  await mod.restart('wg');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(calls.length,1);
   assert.deepEqual(calls[0],['/usr/libexec/relay-wg-restart',['wg']]);
   assert.equal(mod._restarting.has('wg'),true);
   resolveCommand({code:0}); await first;
   assert.equal(mod._restarting.size,0); assert.deepEqual(samples,[['wg',{}]]);
-  const failed=mod.restart('wg'); resolveCommand({code:1,stderr:'restart rejected'}); await failed;
+  const failed=mod.restart('wg');
+  await new Promise(resolve => setImmediate(resolve));
+  resolveCommand({code:1,stderr:'restart rejected'}); await failed;
   assert.equal(notifications.length,1); assert.equal(mod._restarting.size,0);
   const count=calls.length;
+  allowed=false;
+  await mod.restart('wg');
+  assert.equal(calls.length,count,'Revoked permissions must block restarts even when the visible button was enabled');
+  assert.equal(notifications.length,2);
   await mod.restart('lan'); assert.equal(calls.length,count);
   mod._interfaces[0].canRestart=false;
   await mod.restart('wg'); assert.equal(calls.length,count);

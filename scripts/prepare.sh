@@ -30,10 +30,8 @@ done
 # Register optional dependency metadata referenced by upstream base package Makefiles.
 # Installing a feed definition is not selecting a package for the firmware.
 ./scripts/feeds install -p packages libev bluez-utils libpam libtirpc liblzma libzstd libnetsnmp-nossl
-./scripts/feeds install -p luci luci-mod-admin-full luci-proto-wireguard
-./scripts/feeds install -p relayos luci-theme-relay kmod-crypto-airoha-armv8 relay-ipsec
-[[ -e package/feeds/relayos/crypto-airoha-armv8/Makefile ]] || die "Airoha ARMv8 crypto package not installed"
-[[ -e package/feeds/relayos/relay-ipsec/Makefile ]] || die "RelayOS IPsec package not installed"
+./scripts/feeds install -p luci luci-mod-network luci-mod-system luci-proto-wireguard
+./scripts/feeds install -p relayos luci-theme-relay
 [[ -e package/feeds/relayos/luci-theme-relay/Makefile ]] || die "RelayOS feed package not installed"
 require_source
 printf 'Prepared %s at %s (%s)\n' "$device" "$ow" "$source_sha"

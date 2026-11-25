@@ -1,3 +1,0 @@
-# RelayOS manual multi-peer IKEv2 configuration. Disabled until explicitly set.
-config globals 'globals'
-	option enabled '0'

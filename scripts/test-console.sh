@@ -11,6 +11,7 @@ for script in "$console/root/etc/uci-defaults/95_luci-theme-relay" \
               "$console/root/etc/init.d/relay-traffic" \
               "$console/root/usr/libexec/relay-traffic" \
               "$console/root/usr/libexec/relay-wg-restart" \
+              "$product_root/overlay/etc/uci-defaults/98-relay-retire-ipsec" \
               "$product_root/overlay/etc/uci-defaults/99-airrelay-network"; do
     sh -n "$script"
 done
@@ -19,10 +20,6 @@ for source_file in "$console"/htdocs/luci-static/resources/view/relay/*.js \
     node --check "$source_file"
 done
 for test_file in "$product_root"/tests/test-console-*.cjs; do node "$test_file"; done
-sh -n "$product_root/packages/relay-ipsec/files/relay-ipsec"
-sh -n "$product_root/packages/relay-ipsec/files/relay-ipsec-prepare"
-sh -n "$product_root/packages/relay-ipsec/files/relay.ipsec"
-bash "$product_root/tests/test-ipsec-control.sh"
 msgfmt --check --output-file=/dev/null "$console/po/zh_Hans/relay.po"
 if grep -q '/luci-static/bootstrap' "$console/htdocs/luci-static/relay/cascade.css"; then
     die "Console must not import an unbundled theme"

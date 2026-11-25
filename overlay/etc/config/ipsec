@@ -1,6 +1,0 @@
-# No peers, no automatic route installation, and no IKE daemon by default.
-config globals 'globals'
-	option enabled '0'
-	option rtinstall_enabled '0'
-
-config syslog 'syslog'

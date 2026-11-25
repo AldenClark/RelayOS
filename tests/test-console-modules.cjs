@@ -44,7 +44,6 @@ dependencies.wireguard = loadModule('relay/wireguard.js');
 dependencies.systemManager = loadModule('relay/system.js');
 dependencies.agentState = loadModule('relay/agent-state.js');
 dependencies.wgConfig = loadModule('relay/wg-config.js');
-dependencies.ipsec = loadModule('relay/ipsec.js');
 
 const traffic = dependencies.traffic;
 assert.equal(traffic.bytes(1024), '1.0 KB');
@@ -78,4 +77,43 @@ assert.equal((traffic.linePath(gap, 'rx', 90).match(/M/g) || []).length, 2);
 for (const file of fs.readdirSync(path.join(resources, 'view/relay')))
   if (file.endsWith('.js')) loadModule(`view/relay/${file}`);
 
-console.log('RelayOS LuCI modules: factory contracts and traffic sampling OK');
+async function overviewPolling() {
+  const polls = new Map();
+  let mountFrame, historyReads = 0, elapsed = 0;
+  Object.assign(dependencies, {
+    E: () => ({ isConnected: false }),
+    L: { url: () => '', resolveDefault: (promise, fallback) => promise.catch(() => fallback) },
+    document: { createElementNS: () => ({ setAttribute() {}, classList: { add() {} }, appendChild() {} }) },
+    performance: { now: () => elapsed },
+    requestAnimationFrame: callback => { mountFrame = callback; },
+    poll: { add: (callback, interval) => polls.set(interval, callback), remove: callback => {
+      for (const [interval, registered] of polls)
+        if (registered === callback) polls.delete(interval);
+    } },
+    fs: { read: async () => { historyReads++; return ''; } },
+    wireguard: { snapshot: async () => [], render() {} }
+  });
+  const view = loadModule('view/relay/overview.js');
+  view.updateSnapshot = () => {};
+  const page = view.render(await view.load());
+  assert.equal(historyReads, 1);
+  assert.equal(polls.size, 0, 'A synchronous poll must not run against an unmounted page');
+  page.isConnected = true;
+  mountFrame();
+  assert.deepEqual([...polls.keys()], [5, 15]);
+  await polls.get(15)();
+  assert.equal(historyReads, 1, 'Skip a duplicate read just after the initial load');
+  elapsed = 15000;
+  await polls.get(5)();
+  assert.equal(historyReads, 1);
+  await polls.get(15)();
+  assert.equal(historyReads, 2);
+  page.isConnected = false;
+  await polls.get(5)();
+  await polls.get(15)();
+  assert.equal(polls.size, 0);
+}
+
+overviewPolling().then(() => {
+  console.log('RelayOS LuCI modules: factory contracts, traffic sampling and overview polling OK');
+}).catch(error => { console.error(error); process.exitCode = 1; });

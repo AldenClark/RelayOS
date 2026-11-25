@@ -34,9 +34,7 @@ check_fit() {
             pcie@*) [[ "$(fdtget -t s "$dtb" "/soc/$pci_node" status)" == disabled ]] || die "PCIe node unexpectedly enabled: $pci_node" ;;
         esac
     done
-    [[ "$(fdtget -t s "$dtb" /soc/crypto@1fb70000 compatible)" == *inside-secure,safexcel-eip93ies* ]] || die "EIP93 device tree node missing"
-    [[ "$(fdtget -t s "$dtb" /soc/crypto@1fb70000 status 2>/dev/null || true)" != disabled ]] || die "EIP93 device tree node disabled"
-    printf 'Verified FIT board, PCS, PCIe and EIP93 policy: %s\n' "$(basename "$image")"
+    printf 'Verified FIT board, PCS and PCIe policy: %s\n' "$(basename "$image")"
 }
 sysupgrade="$target_dir/$image_prefix-squashfs-sysupgrade.itb"
 recovery="$target_dir/$image_prefix-initramfs-recovery.itb"

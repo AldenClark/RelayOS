@@ -3,7 +3,7 @@
 Minimal OpenWrt images for the **second-hop AirRelay exit node**. These are
 not general-purpose customer routers. The intended traffic path is:
 
-1. A first-hop server sends IPv4 packets over **Linux kernel WireGuard** or optional native IKEv2/IPsec.
+1. A first-hop server sends IPv4 packets over **Linux kernel WireGuard**.
 2. Linux forwards authenticated tunnel packets to the copper uplink.
 3. nftables performs IPv4 masquerading for direct Internet egress.
 4. A future Rust AirRelay Agent handles enrollment, cloud configuration and
@@ -26,8 +26,8 @@ The two supported devices are:
 - **Included:** SoC Ethernet / DSA / PHY, NAND/UBI, procd, UCI/ubus, netifd,
   Dropbear, firewall4/nftables IPv4 NAT, kernel WireGuard (`kmod-wireguard`),
   `wireguard-tools`, and a small bilingual LuCI HTTPS UI with the **RelayOS Console**
-  theme, a minimal strongSwan/swanctl IKEv2 stack (off by default), kernel XFRM and EIP93 Crypto API support, `luci-proto-wireguard`, `uhttpd`, `uhttpd-mod-ubus`, and `px5g-mbedtls`.
-- **Excluded:** DHCP server, PPPoE, Wi-Fi, PON userspace, VoIP, legacy IPsec starter,
+  theme, `luci-proto-wireguard`, `uhttpd`, `uhttpd-mod-ubus`, and `px5g-mbedtls`.
+- **Excluded:** DHCP server, PPPoE, Wi-Fi, PON userspace, VoIP,
   AirRoute Core, userspace WireGuard, TUN and TPROXY modules.
 - The upstream NPU/crypto support and necessary PHY/flash drivers are
   intentionally retained pending hardware validation.
@@ -54,19 +54,13 @@ The two supported devices are:
   target.mk. firewall4 retains its upstream kmod-nft-offload dependency;
   installation of that module does not itself enable flow offloading.
 
-## Second-stage trimming and IPsec
+## Second-stage trimming
 
 The Nokia UBI boards do not enable the SoC PCIe controllers. Disable the PCI bus and device-specific PCIe PHY in the native kernel fragments; keep Ethernet PCS, PHY, DSA, NPU, RNG, and UBI/FIT recovery. Disable MPTCP and disk swap in the top-level kernel options and remove BusyBox swap tools and SMB mount support. Preserve SSH diagnostics and recovery tools. Both SoCs reserve 60 MiB in the DTS (ATF 2, NPU 10, QDMA0 32, QDMA1 16 MiB); do not alter this layout without hardware and DMA address/buffer testing. Keep debugfs and upstream data-plane settings for qualification. Firmware size and idle-memory gains require actual measurements.
 
-IPsec is installed but not started by default. Settings provides one global
-enable switch and multiple independently enabled IKEv2/PSK peers, with endpoint,
-identity, tunnel address, remote subnet and advanced proposal settings. Changes
-take effect together through **Save & Apply**, not separate start/stop buttons.
-The backend provisions native swanctl, per-peer XFRM interfaces and scoped
-network/firewall configuration without applying pending WireGuard/LAN edits.
-See [IPsec management](docs/ipsec-management.md) for the configuration contract,
-failure behavior and verification boundaries, and [IPsec/SOE qualification](docs/ipsec-soe.md)
-for EIP93 algorithm support and why experimental SOE patches remain excluded.
+On upgrade from an image that bundled IPsec, the first boot removes the
+retired RelayOS IPsec settings and the network, firewall and native sections
+marked as owned by that editor. Custom sections and WireGuard settings are preserved.
 
 ## RelayOS Console (default web UI)
 
@@ -76,6 +70,8 @@ up to three top-level navigation items:
 1. **Realtime status:** uptime, load, memory, management IPv4, port carriers,
    WireGuard interface state and tunnel IPv4 / counters / sampled rates.
    Live readings refresh every five seconds through existing `ubus` services.
+   Traffic history refreshes every 15 seconds. Restart permissions are cached
+   per interface on the page and checked again when restart is requested.
    A small procd service (`relay-traffic`) samples `br-lan` byte counters
    every 15 seconds even with no browser open. It atomically retains 241
    counter snapshots in `/tmp/relay-traffic/history`, giving up to one hour
@@ -93,9 +89,9 @@ up to three top-level navigation items:
    confirmation before LuCI's native `/sbin/firstboot -r -y` operation. After
    reset the device uses DHCP; find its new address in the upstream lease table.
    The manual WireGuard editor preserves existing interface names and peers,
-   supports creating a first tunnel and enabling individual peers, and uses
-   native UCI confirmed apply. Creation and peer add/remove stay in the
-   browser draft until **Save & Apply**; an enabled tunnel needs an enabled peer.
+   lets you add independent interfaces with their own keys, addresses and peers,
+   and uses native UCI confirmed apply. Adding or deleting an interface or a peer
+   stays in the browser draft until **Save & Apply**. An enabled interface needs an enabled peer.
    It fills missing tunnel-zone membership, outbound forwarding/NAT, and
    explicit UDP listener rules; existing firewall assignments remain intact.
    The editor refuses default-route takeover and rechecks Agent ownership
@@ -111,7 +107,7 @@ up to three top-level navigation items:
 Management-network and WireGuard forms share native UCI pending changes. Both
 **Save & Apply** buttons now validate both forms before saving, including
 ownership, route overlap and listening-port conflicts, and use LuCI's confirmed
-apply/rollback. IPsec keeps its separate transaction and draft. Same-page
+apply/rollback. Same-page
 mutations are serialized, including WireGuard peer add/remove and the native
 apply confirmation modal, and form inputs are frozen while a network operation
 is pending. If native UCI saving fails after some writes may have succeeded,
@@ -119,11 +115,10 @@ the page preserves its inputs and requires a reload to review pending changes
 before another write; it does not silently retry anonymous peer creation.
 Network/firewall write permissions are checked independently of other settings
 on the page. See the [first control/UI audit](docs/control-ui-audit-2026-11-25.md)
-and [follow-up audit](docs/control-ui-followup-audit-2026-11-25.md) for verified
-fixes and remaining device acceptance.
+and [follow-up audit](docs/control-ui-followup-audit-2026-11-25.md) for historical verification.
 
-The standard `luci-mod-admin-full` back-end views remain installed for
-development and recovery, but they are **not shown in the RelayOS navigation**.
+The standard LuCI network and system views remain installed for development
+and recovery, outside the RelayOS navigation. The image omits the standard status pages.
 This is a UI simplification, **not** a new authorization boundary. Only the
 standalone RelayOS skin is installed; it has independent login, form and
 upgrade styling, while preserving LuCI's existing authentication, RPCs and

@@ -4,11 +4,26 @@
 'require uci';
 'require ui';
 'require rpc';
+'require poll';
 'require relay.agent-state as agentState';
 
 const publicKey = rpc.declare({ object: 'luci.wireguard', method: 'getPublicAndPrivateKeyFromPrivate', params: [ 'privkey' ], expect: { keys: {} } });
 const access = rpc.declare({ object: 'session', method: 'access', params: [ 'scope', 'object', 'function' ], expect: { access: false } });
-const interfaces = rpc.declare({ object: 'network.interface', method: 'dump', expect: { interface: null } });
+const interfaces = rpc.declare({ object: 'network.interface', method: 'dump' });
+const wgInstances = rpc.declare({ object: 'luci.wireguard', method: 'getWgInstances', reject: true });
+
+function peerStatus(instances, name, key, disabled) {
+  if (disabled) return _('Peer disabled');
+  if (!instances || typeof instances !== 'object' || Array.isArray(instances)) return _('Status unavailable');
+  const peers = instances[name]?.peers;
+  const peer = Array.isArray(peers) && peers.find(entry => entry.public_key === key);
+  if (!peer) return _('Peer not active');
+  const timestamp = Number(peer.latest_handshake);
+  if (timestamp === 0) return _('No handshake yet');
+  const age = Date.now() / 1000 - timestamp;
+  if (!Number.isFinite(age) || age < 0) return _('Status unavailable');
+  return age < 180 ? _('Recent handshake') : _('No recent handshake');
+}
 
 function keyValid(_id, value) {
   return !value || (typeof value === 'string' && value.length === 44 &&
@@ -18,6 +33,12 @@ function keyValid(_id, value) {
 
 function list(value) { return Array.isArray(value) ? value : value ? [ value ] : []; }
 const peerDefaults = { route_allowed_ips: '1', persistent_keepalive: '25' };
+
+function listenerRule(name) {
+  const id = 'airrelay_wg_' + name;
+  const rule = uci.get('firewall', id);
+  return rule?.['.type'] === 'rule' && rule.name === 'AirRelay WireGuard ' + name ? id : null;
+}
 
 function concealed(option) {
   option.password = true;
@@ -134,7 +155,6 @@ function usableZone(zone) {
 function validate(names, environment = {}) {
   const selected = new Set(names.filter(name => uci.get('network', name, 'proto') === 'wireguard'));
   const reserved = [], locals = [], remotes = [], endpoints = [], ports = new Set();
-  const reservedPorts = new Set(environment.reservedPorts || []);
   const reserve = (value, mask, route = false) => {
     const net = subnet(value, mask);
     if (net && (net.prefix || !route)) reserved.push(net);
@@ -143,9 +163,7 @@ function validate(names, environment = {}) {
     const net = configuredSubnet(value, mask, wireguard);
     if (net && (net.prefix || !route)) reserved.push(net);
   };
-  for (const value of environment.routes || []) reserve(value, undefined, true);
   for (const section of uci.sections('network')) {
-    if (Array.isArray(environment.routes) && section.relay_owner === 'relay-ipsec-v1') continue;
     if (section['.type'] === 'interface' && !selected.has(section['.name'])) {
       for (const address of configuredList(section.ipaddr)) reserveConfigured(address, section.netmask, false);
       for (const address of configuredList(section.addresses, section.proto === 'wireguard'))
@@ -173,7 +191,6 @@ function validate(names, environment = {}) {
     }
     const port = section.listen_port ? Number(section.listen_port) : 0;
     if (port && !tunnelDisabled(section.disabled)) {
-      if (reservedPorts.has(port)) throw new Error(_('WireGuard listen port conflicts with the enabled IPsec service.'));
       if (ports.has(port)) throw new Error(_('Enabled WireGuard tunnels must use different listen ports.'));
       ports.add(port);
     }
@@ -235,11 +252,11 @@ async function changeDraft(map, change) {
   await map.load();
   return map.renderContents();
 }
-async function prepare(map, routes, reservedPorts = []) {
+async function prepare(map) {
   await assertEditable();
-  const links = await interfaces();
+  const links = (await interfaces())?.interface;
   if (!Array.isArray(links)) throw new Error(_('Unable to verify current network routes.'));
-  provision(map._tunnelNames, { interfaces: links, routes, reservedPorts });
+  provision(map._tunnelNames, { interfaces: links.filter(link => !map._removedTunnels?.has(link.interface)) });
 }
 
 // Keep existing assignments and user firewall rules. Only provision missing
@@ -270,7 +287,7 @@ function provision(names, environment = {}) {
     }
     const id = 'airrelay_wg_' + name;
     const existing = uci.get('firewall', id);
-    if (existing && (existing['.type'] !== 'rule' || existing.name !== 'AirRelay WireGuard ' + name))
+    if (existing && !listenerRule(name))
       throw new Error(_('A firewall rule name is already in use.'));
     if (uci.sections('network', 'wireguard_' + name).some(peer => list(peer.allowed_ips).some(defaultRoute)))
       throw new Error(_('Keep the management default route outside WireGuard.'));
@@ -309,32 +326,28 @@ function provision(names, environment = {}) {
         enabled: tunnelDisabled(uci.get('network', name, 'disabled')) ? '0' : '1' }))
         uci.set('firewall', id, key, value);
     }
-    else if (uci.get('firewall', id, 'name') === 'AirRelay WireGuard ' + name)
+    else if (listenerRule(name))
       uci.remove('firewall', id);
   }
 }
 
 function fields(map, name) {
-  const exists = uci.get('network', name, 'proto') === 'wireguard';
   const section = map.section(form.NamedSection, name, 'interface', name);
-  section.hidetitle = map._tunnelNames.length === 1;
-  section.addremove = !exists;
-  section.addbtntitle = _('Create tunnel');
-  section.handleAdd = function() { return edit(map, async () => {
-    await assertEditable();
-    if (uci.get('network', name)) throw new Error(_('Interface name is already in use.'));
-    // Parse the current form before adding a section. Failed validation must
-    // not leave an invisible draft section behind, and parse would otherwise
-    // remove creation defaults for fields which have not been rendered yet.
-    return changeDraft(map, () => {
-      uci.add('network', 'interface', name);
-      uci.set('network', name, 'proto', 'wireguard');
-      // Creation must not expose an unguarded native Delete action on redraw.
-      section.addremove = false;
-      uci.set('network', name, 'tunlink', 'lan');
-      uci.set('network', name, 'listen_port', '51820');
-    });
-  }); };
+  section.addremove = true;
+  section.delbtntitle = _('Delete interface');
+  section.handleRemove = () => ui.showModal(_('Delete WireGuard interface?'), [
+    E('p', {}, _('The interface %s and its peers will be removed when you save and apply.').format(name)),
+    E('div', { class: 'ar-modal-actions' }, [
+      E('button', { type: 'button', class: 'btn', click: () => ui.hideModal() }, _('Cancel')),
+      E('button', {
+        type: 'button', class: 'btn cbi-button cbi-button-remove',
+        click: ui.createHandlerFn(null, async () => {
+          ui.hideModal();
+          return removeInterface(map, section, name);
+        })
+      }, _('Delete interface'))
+    ])
+  ]);
   let o = section.option(form.Flag, 'disabled', _('Enable tunnel'));
   o.enabled = '0'; o.disabled = '1'; o.default = '0'; o.rmempty = false;
   o.load = id => tunnelDisabled(uci.get('network', id, 'disabled')) ? '1' : '0';
@@ -379,6 +392,14 @@ function fields(map, name) {
     const node = renderPeers.call(this, ids, nodes);
     if (ids.length <= 1)
       node.querySelectorAll('.cbi-section-remove').forEach(buttons => buttons.remove());
+    node.querySelectorAll(':scope > .cbi-section-node').forEach((row, index) => {
+      const action = row.previousElementSibling;
+      const fallback = _('Peer %d').format(index + 1);
+      const title = E('h4', { 'data-default-title': fallback }, [uci.get('network', ids[index], 'description')?.trim() || fallback]);
+      const heading = E('div', { class: 'ar-wg-heading' }, title);
+      if (action?.classList.contains('cbi-section-remove')) heading.appendChild(action);
+      row.prepend(heading);
+    });
     return node;
   };
   peers.handleRemove = function(id) { return edit(map, async () => {
@@ -396,6 +417,13 @@ function fields(map, name) {
   o.enabled = '0'; o.disabled = '1'; o.default = '0'; o.rmempty = false;
   o.load = id => uci.get('network', id, 'disabled') === '1' ? '1' : '0';
   o = peers.option(form.Value, 'description', _('Name'));
+  o.onchange = function(_event, id, value) {
+    const title = this.getUIElement(id)?.node.closest('.cbi-section-node')?.querySelector('h4[data-default-title]');
+    if (title) title.textContent = value?.trim() || title.dataset.defaultTitle;
+  };
+  o = peers.option(form.DummyValue, '_status', _('Connection status'));
+  o.renderWidget = id => E('span', { class: 'ar-pill', 'data-wg-status': name,
+    'data-wg-peer': id }, _('Checking…'));
   o = peers.option(form.Value, 'public_key', _('Peer public key'));
   o.rmempty = false; o.validate = keyValid;
   o = peers.option(form.Value, 'preshared_key', _('Preshared key'));
@@ -425,28 +453,62 @@ function fields(map, name) {
   peerOption.parse = function(id) {
     if (this.isActive(id)) return parsePeers.call(this, id);
   };
-  if (name === map._tunnelNames[map._tunnelNames.length - 1]) {
-    o = section.option(form.DummyValue, '_apply', ' ');
-    o.renderWidget = () => E('button', {
-      class: 'btn cbi-button cbi-button-apply important', disabled: map.readonly || null,
-      click: ui.createHandlerFn(null, async () => {
-        if (map._apply) return map._apply(map);
-        await map.save(() => prepare(map));
-        return ui.changes.apply(true);
-      })
-    }, _('Save & Apply'));
-  }
+}
+
+function removeInterface(map, section, name) {
+  return edit(map, async () => {
+    await assertEditable();
+    const index = map.children.indexOf(section);
+    if (index < 0) return;
+    // Save edits to the remaining interfaces even if the deleted form is incomplete.
+    const parse = section.parse;
+    section.parse = () => Promise.resolve();
+    try {
+      return await changeDraft(map, () => {
+        for (const peer of uci.sections('network', 'wireguard_' + name))
+          uci.remove('network', peer['.name']);
+        uci.remove('network', name);
+        for (const zone of uci.sections('firewall', 'zone')) {
+          const networks = configuredList(zone.network);
+          if (!networks.includes(name)) continue;
+          const remaining = networks.filter(network => network !== name);
+          uci.set('firewall', zone['.name'], 'network', remaining.length ? remaining : null);
+        }
+        const rule = listenerRule(name);
+        if (rule) uci.remove('firewall', rule);
+        map._removedTunnels.add(name);
+        map._tunnelNames.splice(index, 1);
+        map.children.splice(index, 1);
+      });
+    }
+    finally { section.parse = parse; }
+  });
+}
+
+function addInterface(map) {
+  return edit(map, async () => {
+    await assertEditable();
+    return changeDraft(map, () => {
+      let i = 0;
+      let name;
+      do {
+        name = 'wg' + i++;
+      } while (map._removedTunnels.has(name) || uci.get('network', name) || uci.sections('network', 'wireguard_' + name).length);
+      uci.add('network', 'interface', name);
+      uci.set('network', name, 'proto', 'wireguard');
+      uci.set('network', name, 'tunlink', 'lan');
+      if (!map._tunnelNames.length) uci.set('network', name, 'listen_port', '51820');
+      map._tunnelNames.push(name);
+      fields(map, name);
+    });
+  });
 }
 
 async function render(options = {}) {
   const names = uci.sections('network', 'interface').filter(s => s.proto === 'wireguard').map(s => s['.name']);
-  if (!names.length) {
-    let i = 0;
-    while (uci.get('network', 'wg' + i)) i++;
-    names.push('wg' + i);
-  }
   const map = new form.Map('network');
   map._tunnelNames = names;
+  map._removedTunnels = new Set();
   map.chain('firewall');
   map.readonly = !await writable().catch(() => false);
   map._apply = options.onApply;
@@ -455,17 +517,58 @@ async function render(options = {}) {
   for (const name of names) fields(map, name);
   // Keep map identity distinct from the management-interface form.
   const original = map.renderContents;
+  const refresh = async root => {
+    const indicators = root.querySelectorAll('[data-wg-status]');
+    if (!indicators.length) return;
+    const instances = await L.resolveDefault(wgInstances(), null);
+    for (const node of indicators) {
+      const { wgStatus: name, wgPeer: id } = node.dataset;
+      const peer = uci.get('network', id);
+      const status = peerStatus(instances, name, peer?.public_key, peer?.disabled === '1');
+      if (node.textContent !== status) node.textContent = status;
+      node.classList.toggle('is-up', status === _('Recent handshake'));
+    }
+  };
   map.renderContents = function(...args) {
+    for (const section of this.children) section.hidetitle = names.length === 1;
     return Promise.resolve(original.apply(this, args)).then(node => {
       node.id = 'cbi-relay-wireguard';
       node.classList.add('ar-wg-config');
+      const heading = E('div', { class: 'ar-wg-heading' }, E('h2', {}, _('WireGuard')));
+      for (const card of node.querySelectorAll(':scope > .cbi-section')) {
+        const title = card.querySelector(':scope > h3');
+        const action = card.querySelector(':scope > .cbi-section-remove');
+        if (title) {
+          const row = E('div', { class: 'ar-wg-heading' }, title);
+          if (action) row.appendChild(action);
+          card.prepend(row);
+        }
+        else if (action) heading.appendChild(action);
+      }
+      node.prepend(heading);
+      const actions = E('div', { class: 'ar-wg-actions' }, [
+        E('button', {
+          type: 'button', class: 'btn cbi-button', disabled: this.readonly || null,
+          click: ui.createHandlerFn(null, () => addInterface(this))
+        }, _('Add interface')),
+        names.length || this._removedTunnels.size ? E('button', {
+          type: 'button', class: 'btn cbi-button cbi-button-apply important', disabled: this.readonly || null,
+          click: ui.createHandlerFn(null, async () => {
+            if (this._apply) return this._apply(this);
+            await this.save(() => prepare(this));
+            return ui.changes.apply(true);
+          })
+        }, _('Save & Apply')) : ''
+      ]);
+      node.appendChild(actions);
+      void refresh(node);
       return node;
     });
   };
-  return map.render().then(node => E('section', { class: 'ar-wg-editor' }, [
-    E('h2', {}, _('WireGuard')),
-    node
-  ]));
+  const node = await map.render();
+  const update = () => node.isConnected ? refresh(node) : poll.remove(update);
+  poll.add(update, 10);
+  return E('section', { class: 'ar-wg-editor' }, node);
 }
 
 return baseclass.extend({ keyValid, subnet, validate, provision, prepare, render });

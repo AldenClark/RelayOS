@@ -57,22 +57,5 @@
         ]
       }
     }
-  },
-  "luci-relay-ipsec": {
-    "description": "Read redacted IPsec peers and apply validated manual IPsec settings",
-    "read": {
-      "ubus": {
-        "relay.ipsec": [
-          "get"
-        ]
-      }
-    },
-    "write": {
-      "ubus": {
-        "relay.ipsec": [
-          "apply"
-        ]
-      }
-    }
   }
 }

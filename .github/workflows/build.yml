@@ -173,5 +173,5 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "RelayOS ${{ inputs.device }} (${{ env.SUBTARGET }}) #${{ github.run_number }}" \
-            --notes "Nokia XG-040G-$DEVICE ($SUBTARGET), UBI boot layout ONLY. Kernel WireGuard and opt-in IPsec, copper Ethernet, no PON. Source: $GITHUB_SHA; OpenWrt: https://github.com/openwrt/openwrt/commit/$upstream. Hardware acceptance is separate from build verification." \
+            --notes "Nokia XG-040G-$DEVICE ($SUBTARGET), UBI boot layout ONLY. Kernel WireGuard, copper Ethernet, no PON. Source: $GITHUB_SHA; OpenWrt: https://github.com/openwrt/openwrt/commit/$upstream. Hardware acceptance is separate from build verification." \
             --prerelease

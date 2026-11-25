@@ -31,7 +31,7 @@ window.L = Object.create(window.LuCI.prototype);
 window.L.hasViewPermission = () => true;
 window.E = (...args) => window.L.dom.create(...args);
 const copy = value => JSON.parse(JSON.stringify(value));
-let db, serial = 0, statusError = null, statusBarrier = null, statusCalls = 0;
+let db, serial = 0, statusError = null, statusBarrier = null;
 let failMutation = null, applies = 0, coordination;
 const modules = {
   baseclass: window.LuCI.extend({ __init__() {} }), dom: window.L.dom,
@@ -40,18 +40,14 @@ const modules = {
   poll: { add() {}, remove() {} }, fs: {},
   agentState: { status: async () => ({ managed: false }), assertManual: async () => {} },
   systemManager: { render: () => window.E('div') },
-  ipsec: {
-    async status() {
-      statusCalls++;
-      if (statusBarrier) await statusBarrier;
-      if (statusError) throw statusError;
-      return { enabled: false, peers: [] };
-    },
-    render(_state, _agent, _readonly, gate) { coordination = gate; return window.E('div'); }
-  },
   rpc: { declare: spec => async (...args) => {
     if (spec.object === 'session') return true;
-    if (spec.object === 'network.interface') return [];
+    if (spec.object === 'network.interface') {
+      if (statusBarrier) await statusBarrier;
+      if (statusError) throw statusError;
+      return { interface: [] };
+    }
+    if (spec.method === 'getWgInstances') return {};
     if (spec.object === 'luci.wireguard') return { pub: 'PUBLIC:' + args[0] };
     assert.equal(spec.object, 'uci');
     const [config, section, values] = args;
@@ -81,12 +77,21 @@ function load(name, dir = luci) {
 modules.uci = load('uci');
 modules.validation = load('validation');
 modules.ui = load('ui'); window.L.ui = modules.ui;
+window.L.require = async name => {
+  assert.equal(name, 'ui');
+  return modules.ui;
+};
 modules.form = load('form');
 modules.ui.changes.apply = confirmed => {
   assert.equal(confirmed, true); applies++;
   document.body.classList.add('modal-overlay-active');
 };
 modules.wgConfig = load('wg-config', path.join(root, 'packages/luci-theme-relay/htdocs/luci-static/resources/relay'));
+const renderWireGuard = modules.wgConfig.render;
+modules.wgConfig.render = function(options) {
+  coordination = options.coordination;
+  return renderWireGuard.call(this, options);
+};
 const settings = load('settings', path.join(root, 'packages/luci-theme-relay/htdocs/luci-static/resources/view/relay'));
 const tick = () => new Promise(resolve => setImmediate(resolve));
 async function flush() { for (let i = 0; i < 16; i++) await tick(); }
@@ -110,7 +115,7 @@ async function mount() {
     luci: {}
   };
   mutations.length = 0; errors.length = 0; unhandled.length = 0;
-  statusError = statusBarrier = failMutation = null; statusCalls = applies = 0;
+  statusError = statusBarrier = failMutation = null; applies = 0;
   settings._networkBusy = false; settings._networkNeedsReload = false;
   modules.uci.unload(['network', 'firewall', 'luci']);
   document.body.classList.remove('modal-overlay-active');
@@ -120,9 +125,9 @@ async function run() {
   try {
     await mount();
     const original = fill('lan', 'ipaddr', '192.168.1.21');
-    statusError = new window.Error('Current IPsec status unavailable');
+    statusError = new window.Error('Current routes unavailable');
     networkButton().click(); await flush();
-    assert.match(document.querySelector('.alert-message')?.textContent || '', /Current IPsec status unavailable/,
+    assert.match(document.querySelector('.alert-message')?.textContent || '', /Current routes unavailable/,
       'A failed shared apply must visibly explain why the draft was not applied');
     assert.equal(input('lan', 'ipaddr'), original);
     assert.equal(original.value, '192.168.1.21');

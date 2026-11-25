@@ -7,12 +7,13 @@ const resources = path.resolve(__dirname, '../packages/luci-theme-relay/htdocs/l
 let serviceState = {}, serviceError = null, writeAllowed = true, runtimeInterfaces = [], keyReplies = null;
 const notifications = [];
 const dependencies = {
-  baseclass: { extend: value => value }, _: value => value, form: {}, ui: { addNotification: (_title, content) => notifications.push(content) },
+  baseclass: { extend: value => value }, _: value => value, form: {}, ui: { createHandlerFn: (_context, fn) => fn, addNotification: (_title, content) => notifications.push(content) },
   L: { hasViewPermission: () => true }, E: (tag,attrs,children) => ({tag,attrs,children}),
+  poll: { add() {}, remove() {} },
   rpc: { declare: spec => (...args) => spec.object === 'rc'
     ? (serviceError ? Promise.reject(serviceError) : Promise.resolve(serviceState))
     : spec.object === 'session' ? Promise.resolve(writeAllowed)
-    : spec.object === 'network.interface' ? Promise.resolve(runtimeInterfaces)
+    : spec.object === 'network.interface' ? Promise.resolve({ interface: runtimeInterfaces })
     : keyReplies ? new Promise(resolve => keyReplies.push({ key: args[0], resolve })) : Promise.resolve({}) }
 };
 function module(name) {
@@ -122,8 +123,7 @@ async function run() {
   assert.equal(db.network.peer.route_allowed_ips,'1');
   assert.equal(db.network.peer.persistent_keepalive,'25');
 
-  // The WireGuard editor must reject conflicts in the reverse direction too:
-  // already configured IPsec routes/addresses, management DHCP and other peers.
+  // Reject conflicts with configured routes and addresses, management DHCP and peers.
   for (const conflicting of [
     { '.type':'interface',proto:'static',ipaddr:'10.77.0.2/32' },
     { '.type':'route',target:'10.77.0.0/24',interface:'rpa_00000001' },
@@ -134,11 +134,6 @@ async function run() {
     assert.throws(()=>wg.provision(['wg0']),/conflict/); assert.equal(changes,0);
   }
   reset();
-  db.network.oldIpsec={'.type':'route',target:'10.77.0.1/32',relay_owner:'relay-ipsec-v1'};
-  assert.throws(()=>wg.provision(['wg0']),/conflict/);
-  wg.provision(['wg0'],{routes:[]});
-  reset();
-  assert.throws(()=>wg.provision(['wg0'],{routes:['10.77.0.1/32']}),/conflict/); assert.equal(changes,0);
   assert.throws(()=>wg.provision(['wg0'],{interfaces:[{interface:'lan','ipv4-address':[{address:'10.77.0.50',mask:24}]}]}),/conflict/);
   assert.equal(changes,0);
   assert.throws(()=>wg.provision(['wg0'],{interfaces:[{interface:'lan',route:[{target:'10.77.0.1',mask:32}]}]}),/conflict/);
@@ -181,12 +176,6 @@ async function run() {
   db.network.peer1={'.type':'wireguard_wg1',allowed_ips:['10.78.0.1/32']};
   assert.throws(()=>wg.provision(['wg0','wg1']),/different listen ports/); assert.equal(changes,0);
   db.network.wg1.listen_port='51821'; wg.provision(['wg0','wg1']);
-  for (const port of ['500','4500']) {
-    reset(); db.network.wg0.listen_port=port;
-    assert.throws(()=>wg.provision(['wg0'],{reservedPorts:[500,4500]}),/IPsec service/); assert.equal(changes,0);
-    db.network.wg0.disabled='1'; wg.provision(['wg0'],{reservedPorts:[500,4500]});
-    db.network.wg0.disabled='true'; wg.provision(['wg0'],{reservedPorts:[500,4500]});
-  }
   reset(); db.network.peer.public_key='one'; db.network.peer2={'.type':'wireguard_wg0',public_key:'one',allowed_ips:['10.77.0.3/32']};
   assert.throws(()=>wg.provision(['wg0']),/different public key/); assert.equal(changes,0);
   reset(); delete db.network.peer;
@@ -212,18 +201,18 @@ async function run() {
     }
     getOption(name) { return this.options[name]; }
     cfgsections() { return uci.sections('network',this.sectiontype).map(s=>s['.name']); }
-    renderContents() { return {querySelectorAll:()=>[{remove(){removedButtons++;}}]}; }
+    renderContents() { return {querySelectorAll: selector => selector === '.cbi-section-remove' ? [{remove(){removedButtons++;}}] : []}; }
   }
   Object.assign(dependencies.form,{NamedSection:'named',TypedSection:'typed',SectionValue:'section',
     Map: class {
-      constructor(){this.sections=[];this.saves=0;maps.push(this);}
+      constructor(){this.sections=[];this.children=this.sections;this.saves=0;maps.push(this);}
       chain(){}
       section(type,...args){const s=new Section(this,type,args);this.sections.push(s);return s;}
       checkDepends(){}
       parse(){return Promise.resolve();}
       load(){return Promise.resolve();}
       save(cb){this.saves++;return Promise.resolve().then(cb);}
-      renderContents(){return {classList:{add(){}},id:''};}
+      renderContents(){return {classList:{add(){}},id:'',querySelectorAll:()=>[],appendChild(){},prepend(){}};}
       render(){return this.renderContents();}
     }});
   reset();
@@ -263,18 +252,6 @@ async function run() {
   await draftFailure(()=>peers.handleAdd(),/managing/);
   assert.deepEqual(db,protectedState);
   serviceState={};
-  reset(); db.network={};
-  await wg.render();
-  const emptyTunnel=maps.at(-1).sections[0];
-  assert.equal(emptyTunnel.addremove,true);
-  await emptyTunnel.handleAdd();
-  assert.equal(db.network.wg0.proto,'wireguard');
-  assert.equal(db.network.wg0.tunlink,'lan');
-  assert.equal(db.network.wg0.listen_port,'51820');
-  assert.equal(db.network.wg0.private_key,undefined);
-  assert.equal(emptyTunnel.addremove,false, 'Created tunnel must not expose native unguarded Delete');
-  assert.equal(maps.at(-1).saves,0);
-
   writeAllowed=false;
   await wg.render(); assert.equal(maps.at(-1).readonly,true);
   await draftFailure(()=>peers.handleAdd(),/read-only/);

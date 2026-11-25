@@ -377,15 +377,13 @@ body.ar-auth { min-height: 100vh; box-sizing: border-box; display: flex; flex-di
   .ar-settings-page .cbi-value[data-name="_apply"] .cbi-value-title { display: none; }
 }
 
-.ar-wg-config { margin-top: 14px; }
 .ar-wg-config .cbi-section h3 { font-size: 13px; font-weight: 600; }
 .ar-wg-config .cbi-value { border: 0; }
 .ar-wg-config .cbi-value[data-name="_peers"] { display: block; }
 .ar-wg-config .cbi-value[data-name="_peers"] > .cbi-value-title { display: none; }
 body.ar-ui .ar-wg-config .cbi-value .cbi-section { border: 0; box-shadow: none; padding: 16px 0 0; margin: 0; }
-.ar-wg-config .cbi-section-remove { margin-bottom: 12px; }
 .ar-wg-config .cbi-section-create { margin-top: 16px; }
-.ar-wg-config .cbi-section-node + .cbi-section-remove { margin-top: 24px; }
+.ar-wg-config .cbi-section-node + .cbi-section-node { margin-top: 24px; }
 .ar-wg-apply { padding-left: 239px; margin-top: 16px; }
 .ar-wg-config > .cbi-section:empty { display: none; }
 @media (max-width: 550px) {
@@ -408,31 +406,17 @@ body.ar-ui select.ar-language { padding-right: 25px !important; background-posit
 @media (forced-colors: active) { body.ar-ui select { appearance: auto; background-image: none; } }
 
 .ar-wg-editor { margin-top: 32px; }
-.ar-wg-editor > h2 { margin: 0; font-size: 16px; font-weight: 650; }
+.ar-wg-heading { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.ar-wg-heading > :is(h2, h3, h4) { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.ar-wg-heading > h2 { font-size: 16px; font-weight: 650; }
+.ar-wg-heading > h4 { font-size: 13px; font-weight: 600; }
+.ar-wg-heading > .cbi-section-remove { flex: none; }
+.ar-wg-heading .cbi-button { min-height: 32px; padding: 5px 10px; margin: 0; }
 .ar-wg-config .cbi-value-field > div > .control-group { display: flex; align-items: center; gap: 8px; width: min(100%, 360px); }
 .ar-wg-config .control-group > input.cbi-input-password { flex: 1 1 0; width: 0; min-width: 0; }
 .ar-wg-config .control-group > .cbi-button { flex: 0 0 38px; padding: 0; min-height: 39px; }
 
-.ar-ipsec-peer { margin-top: 20px; }
-.ar-ipsec-peer + .ar-ipsec-peer { border-top: 1px solid var(--ar-line); padding-top: 16px; }
-.ar-ipsec-peer-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
-.ar-ipsec-peer-head h3 { flex: 1 1 130px; min-width: 0; margin: 0; overflow-wrap: anywhere; }
-.ar-ipsec-peer-head .cbi-button-remove { margin: 0; }
-.ar-ipsec-config .cbi-value-field > input[type="checkbox"] { width: auto; }
-.ar-ipsec-config .cbi-value-field > .cbi-input-text,
-.ar-ipsec-config .cbi-value-field > textarea { width: min(100%, 360px); box-sizing: border-box; }
-.ar-ipsec-config .cbi-value-field > textarea { display: block; resize: vertical; }
-.ar-ipsec-advanced { margin-top: 14px; }
-.ar-ipsec-advanced > summary { cursor: pointer; color: var(--ar-muted); font-size: 12px; padding: 8px 0; }
-.ar-ipsec-pending { margin-right: auto; }
-.ar-ipsec-message { margin-top: 12px; line-height: 1.6; overflow-wrap: anywhere; }
-.ar-ipsec-message:empty { display: none; }
-@media (max-width: 600px) {
-  .ar-ipsec-config .cbi-value-field > .cbi-input-text,
-  .ar-ipsec-config .cbi-value-field > textarea { width: 100%; }
-  .ar-ipsec-config .cbi-page-actions { gap: 8px; }
-  .ar-ipsec-pending:not(:empty) { width: 100%; }
-}
+.ar-wg-actions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-top: 16px; }
 
 .ar-wg-name { flex-wrap: wrap; }
 .ar-wg-restart { margin-left: auto; min-height: 32px; padding: 5px 12px; }

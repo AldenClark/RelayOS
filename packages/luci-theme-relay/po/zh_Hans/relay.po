@@ -290,11 +290,8 @@ msgstr "防火墙规则名称已被占用。"
 msgid "Keep the management default route outside WireGuard."
 msgstr "请勿将设备默认路由切换到 WireGuard。"
 
-msgid "Create tunnel"
-msgstr "创建隧道"
-
-msgid "Interface name is already in use."
-msgstr "接口名称已被占用。"
+msgid "Add interface"
+msgstr "添加接口"
 
 msgid "Enable tunnel"
 msgstr "启用隧道"
@@ -359,236 +356,8 @@ msgstr "正在重启…"
 msgid "Tunnel restart failed."
 msgstr "隧道重启失败。"
 
-msgid "IPsec service operation failed."
-msgstr "IPsec 服务操作失败。"
-
-msgid "IPsec service status is unavailable."
-msgstr "无法获取 IPsec 服务状态。"
-
-msgid "IPsec is managed by AirRoute Agent or unavailable."
-msgstr "IPsec 由 AirRoute Agent 管理，或当前无法操作。"
-
-msgid "IPsec service operation failed. Check the system log and SSH configuration."
-msgstr "IPsec 服务操作失败，请检查系统日志和 SSH 配置。"
-
-msgid "IKE service ready"
-msgstr "IKE 服务已就绪"
-
-msgid "IKE service still responding"
-msgstr "IKE 服务仍在响应"
-
-msgid "IKE service not responding"
-msgstr "IKE 服务未响应"
-
-msgid "Disabled"
-msgstr "已关闭"
-
-msgid "Enable IPsec"
-msgstr "开启 IPsec"
-
-msgid "Disable IPsec"
-msgstr "关闭 IPsec"
-
-msgid "IPsec (IKEv2)"
-msgstr "IPsec（IKEv2）"
-
-msgid "Connection definitions loaded; this does not prove a tunnel is established."
-msgstr "连接配置已加载；不代表隧道已建立。"
-
-msgid "No connection definitions loaded."
-msgstr "尚未加载连接配置。"
-
-msgid "EIP-93 driver registered; hardware use depends on the negotiated ESP algorithm."
-msgstr "EIP-93 驱动已注册，是否使用硬件加速取决于协商的 ESP 算法。"
-
-msgid "EIP-93 driver not registered."
-msgstr "EIP-93 驱动尚未注册。"
-
-msgid "Configure peers, credentials and XFRM routes through SSH or AirRoute Agent. Enabling the service does not open firewall ports or change routes."
-msgstr "通过 SSH 或 AirRoute Agent 配置对端、凭据和 XFRM 路由。开启服务不会自动开放防火墙端口或修改路由。"
-
-msgid "IPsec settings changed elsewhere. Discard this draft and review the current settings."
-msgstr "IPsec 配置已被其他操作修改。请放弃当前草稿，重新查看最新配置。"
-
-msgid "Another IPsec operation is in progress. Try again shortly."
-msgstr "另一个 IPsec 操作正在进行，请稍后重试。"
-
-msgid "IPsec settings conflict with an existing route, interface or configuration. Review the settings."
-msgstr "IPsec 配置与现有路由、接口或其他配置冲突，请检查设置。"
-
-msgid "IKE identities conflict with another peer. Check local and remote identities."
-msgstr "IKE 身份与其他对端冲突，请检查本地和远端身份。"
-
-msgid "A new peer requires a preshared key."
-msgstr "新增对端必须填写预共享密钥。"
-
-msgid "Other network or firewall changes are pending. Apply or discard those changes first."
-msgstr "网络或防火墙还有未应用的修改，请先应用或放弃这些修改。"
-
-msgid "Existing unmanaged IPsec configuration must be reviewed before using this editor."
-msgstr "检测到不由此页面管理的 IPsec 配置，请先检查现有配置再使用此编辑器。"
-
-msgid "IPsec components are unavailable. Check the installed firmware packages."
-msgstr "IPsec 组件不可用，请检查固件中的相关软件包。"
-
-msgid "IPsec settings were rejected. Check the peer parameters and address ranges."
-msgstr "IPsec 配置未通过校验，请检查对端参数和地址范围。"
-
-msgid "IPsec application and rollback failed. Inspect the device through SSH before making further changes."
-msgstr "IPsec 配置应用和回滚均失败，请先通过 SSH 检查设备，再进行其他修改。"
-
-msgid "IPsec settings could not be applied. Review the service status and system log; your draft has been kept."
-msgstr "IPsec 配置应用失败，请检查服务状态和系统日志；当前草稿已保留。"
-
-msgid "Peer identifiers must be unique. Reload the editor."
-msgstr "对端标识必须唯一，请重新加载编辑器。"
-
-msgid "Give every peer a name of 1 to 64 UTF-8 bytes, without control characters."
-msgstr "请为每个对端填写名称，长度为 1～64 个 UTF-8 字节，且不能包含控制字符。"
-
-msgid "Enter a valid peer IPv4 address or DNS hostname, without a port."
-msgstr "请输入有效的对端 IPv4 地址或域名，不要附带端口。"
-
-msgid "IKE identities must start with a letter or digit (optionally after @) and contain only letters, digits, dots, @, underscores and hyphens."
-msgstr "IKE 身份须以字母或数字开头（前面可加 @），且只能包含字母、数字、点、@、下划线和连字符。"
-
-msgid "Each peer must have a different remote IKE identity."
-msgstr "每个对端必须使用不同的远端 IKE 身份。"
-
-msgid "Enter a local tunnel IPv4 address with a /32 prefix."
-msgstr "请输入前缀为 /32 的本地隧道 IPv4 地址。"
-
-msgid "Local tunnel IPv4 addresses must be different for each peer."
-msgstr "不同对端的本地隧道 IPv4 地址不能相同。"
-
-msgid "Enter from 1 to 32 remote IPv4 subnets."
-msgstr "请输入 1～32 个远端 IPv4 网段。"
-
-msgid "Enter valid IPv4 CIDRs; a default route (/0) is not allowed."
-msgstr "请输入有效的 IPv4 CIDR；不允许配置默认路由（/0）。"
-
-msgid "Remote subnets must not contain unspecified, loopback, link-local or multicast addresses."
-msgstr "远端网段不能包含未指定、环回、链路本地或组播地址。"
-
-msgid "Remote IPv4 subnets must not overlap, including between peers."
-msgstr "远端 IPv4 网段不能重叠，不同对端之间也不能重叠。"
-
-msgid "Enter a preshared key of 16 to 128 UTF-8 bytes."
-msgstr "请输入长度为 16～128 个 UTF-8 字节的预共享密钥。"
-
-msgid "Enter a preshared key of 16 to 128 UTF-8 bytes without control characters."
-msgstr "请输入长度为 16～128 个 UTF-8 字节且不含控制字符的预共享密钥。"
-
-msgid "Select a supported IKE and ESP proposal."
-msgstr "请选择受支持的 IKE 和 ESP 算法组合。"
-
-msgid "DPD interval must be an integer from 10 to 3600 seconds."
-msgstr "DPD 检测间隔必须为 10～3600 秒的整数。"
-
-msgid "MTU must be an integer from 576 to 1500."
-msgstr "MTU 必须为 576～1500 的整数。"
-
-msgid "A local tunnel address must not equal an IKE endpoint address."
-msgstr "本地隧道地址不能与 IKE 对端地址相同。"
-
-msgid "A remote subnet must not include a local tunnel address."
-msgstr "远端网段不能包含本地隧道地址。"
-
-msgid "A remote subnet must not include an IKE endpoint address."
-msgstr "远端网段不能包含 IKE 对端地址。"
-
-msgid "IPsec settings applied. A ready IKE service does not by itself mean every tunnel is connected."
-msgstr "IPsec 配置已应用。IKE 服务就绪不代表所有隧道都已连接。"
-
-msgid "Connecting"
-msgstr "连接中"
-
-msgid "Not connected"
-msgstr "未连接"
-
-msgid "Not yet applied"
-msgstr "尚未应用"
-
-msgid "Discard changes"
-msgstr "放弃修改"
-
-msgid "Refresh status"
-msgstr "刷新状态"
-
-msgid "New peer"
-msgstr "新对端"
-
-msgid "Remove peer"
-msgstr "删除对端"
-
 msgid "Enable peer"
 msgstr "启用对端"
-
-msgid "IPv4 address or DNS hostname of the remote IKE peer."
-msgstr "远端 IKE 对端的 IPv4 地址或域名。"
-
-msgid "Local IKE identity"
-msgstr "本地 IKE 身份"
-
-msgid "Remote IKE identity"
-msgstr "远端 IKE 身份"
-
-msgid "A key is stored. Leave this field blank to keep it; enter a new key to replace it."
-msgstr "已保存密钥。留空可保留原密钥，填写新密钥将替换原密钥。"
-
-msgid "Required for a new peer. Use a random key of 16 to 128 UTF-8 bytes."
-msgstr "新增对端必填。请使用长度为 16～128 个 UTF-8 字节的随机密钥。"
-
-msgid "Local tunnel IPv4 address"
-msgstr "本地隧道 IPv4 地址"
-
-msgid "Use a different /32 address for every peer."
-msgstr "请为每个对端使用不同的 /32 地址。"
-
-msgid "Remote IPv4 subnets"
-msgstr "远端 IPv4 网段"
-
-msgid "One IPv4 CIDR per line. No default route, overlapping peer routes or WireGuard routes."
-msgstr "每行一个 IPv4 CIDR。不允许默认路由，也不能与其他对端或 WireGuard 的路由重叠。"
-
-msgid "Advanced parameters"
-msgstr "高级参数"
-
-msgid "IKE proposal"
-msgstr "IKE 算法组合"
-
-msgid "ESP proposal"
-msgstr "ESP 算法组合"
-
-msgid "DPD interval (seconds)"
-msgstr "DPD 检测间隔（秒）"
-
-msgid "Tunnel MTU"
-msgstr "隧道 MTU"
-
-msgid "NAT traversal is automatic. AES-CBC/SHA-256 is the EIP-93 test profile; AES-GCM may use CPU crypto."
-msgstr "自动处理 NAT 穿越。AES-CBC/SHA-256 用于 EIP-93 性能测试；AES-GCM 可能使用 CPU 加密。"
-
-msgid "Changes are applied only when you save. Disabled peers keep protected routes; removing a peer removes its routes."
-msgstr "修改仅在保存时生效。关闭对端会保留受保护的路由；删除对端则会移除其路由。"
-
-msgid "No IPsec peers configured. Add a peer to create a tunnel."
-msgstr "尚未配置 IPsec 对端。添加对端即可创建隧道。"
-
-msgid "Applying…"
-msgstr "正在应用…"
-
-msgid "Unsaved changes"
-msgstr "有未保存的修改"
-
-msgid "IPsec settings are read-only for this session."
-msgstr "当前会话仅可查看 IPsec 设置。"
-
-msgid "At most 256 remote IPv4 subnets are allowed across all peers, including disabled peers."
-msgstr "所有对端的远端 IPv4 子网合计不得超过 256 个，已关闭的对端也计入总数。"
-
-msgid "Editor resource limits: 64 peers, 32 subnets per peer, 256 subnets total including disabled peers; not protocol or hardware limits."
-msgstr "编辑器资源上限：64 个对端、每对端 32 个子网、总计 256 个子网（含已关闭的对端）；这不是协议或硬件限制。"
 
 msgid "Another network operation is in progress. Try again shortly."
 msgstr "另一个网络操作正在进行，请稍后重试。"
@@ -608,14 +377,14 @@ msgstr "请输入隧道 IPv4 地址。"
 msgid "Enter a valid management IPv4 address and contiguous subnet mask."
 msgstr "请输入有效的管理 IPv4 地址，以及连续的子网掩码。"
 
-msgid "Network and WireGuard changes are validated and applied together. IPsec has its own Save & Apply."
-msgstr "管理网络与 WireGuard 的修改会一并校验和应用；IPsec 使用独立的“保存并应用”。"
+msgid "Network and WireGuard changes are validated and applied together."
+msgstr "管理网络与 WireGuard 的修改会一并校验和应用。"
 
 msgid "Network settings are read-only."
 msgstr "当前会话仅可查看网络设置。"
 
-msgid "The management subnet conflicts with a WireGuard or IPsec tunnel."
-msgstr "管理网段与 WireGuard 或 IPsec 隧道冲突。"
+msgid "The management subnet conflicts with a WireGuard tunnel."
+msgstr "管理网络与 WireGuard 隧道网段冲突。"
 
 msgid "Tunnel and management firewall zones must be unambiguous."
 msgstr "隧道和管理接口的防火墙分区归属必须唯一。"
@@ -625,12 +394,6 @@ msgstr "无法核实当前网络路由。"
 
 msgid "WireGuard addresses or routes conflict with another tunnel or the management network."
 msgstr "WireGuard 地址或路由与其他隧道或管理网络冲突。"
-
-msgid "WireGuard and IPsec cannot use the same UDP listen ports (500 and 4500)."
-msgstr "WireGuard 与 IPsec 不能共用 UDP 监听端口 500 或 4500。"
-
-msgid "WireGuard listen port conflicts with the enabled IPsec service."
-msgstr "WireGuard 监听端口与已启用的 IPsec 服务冲突。"
 
 msgid "WireGuard settings are read-only."
 msgstr "当前会话仅可查看 WireGuard 设置。"
@@ -664,3 +427,36 @@ msgstr "管理网络和隧道使用的防火墙分区必须支持 IPv4。"
 
 msgid "Unable to update the WireGuard draft."
 msgstr "无法更新 WireGuard 草稿。"
+
+msgid "Connection status"
+msgstr "连接状态"
+
+msgid "Peer disabled"
+msgstr "已禁用"
+
+msgid "Status unavailable"
+msgstr "状态不可用"
+
+msgid "Peer not active"
+msgstr "对端未运行"
+
+msgid "No handshake yet"
+msgstr "尚未握手"
+
+msgid "Recent handshake"
+msgstr "近期握手成功"
+
+msgid "No recent handshake"
+msgstr "近期无握手"
+
+msgid "Delete interface"
+msgstr "删除接口"
+
+msgid "Delete WireGuard interface?"
+msgstr "删除 WireGuard 接口？"
+
+msgid "The interface %s and its peers will be removed when you save and apply."
+msgstr "保存并应用后将删除接口 %s 及其对端。"
+
+msgid "Peer %d"
+msgstr "对端 %d"

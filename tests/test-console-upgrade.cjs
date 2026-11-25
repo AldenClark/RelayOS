@@ -19,10 +19,12 @@ function verifyPackagedUpgradeContract() {
     'packages/luci-theme-relay/root/usr/share/luci/menu.d/relay-console.json'), 'utf8'));
   assert.ok(menu['admin/relay/settings'].depends.acl.includes('luci-mod-system-flash'));
 
-  for (const [subtarget, model] of [ ['an7581', 'md'], ['an7583', 'mf'] ]) {
-    const config = fs.readFileSync(path.join(repo, 'configs/common.config'), 'utf8');
-    assert.match(config, /^CONFIG_PACKAGE_luci-mod-admin-full=y$/m);
+  const config = fs.readFileSync(path.join(repo, 'configs/common.config'), 'utf8');
+  assert.match(config, /^CONFIG_PACKAGE_luci-mod-network=y$/m);
+  assert.match(config, /^CONFIG_PACKAGE_luci-mod-system=y$/m);
+  assert.doesNotMatch(config, /^CONFIG_PACKAGE_luci-mod-(admin-full|status)=y$/m);
 
+  for (const [subtarget, model] of [ ['an7581', 'md'], ['an7583', 'mf'] ]) {
     const platform = fs.readFileSync(path.join(upstream,
       `target/linux/airoha/${subtarget}/base-files/lib/upgrade/platform.sh`), 'utf8');
     assert.ok(platform.includes(`nokia,xg-040g-${model}-ubi`));

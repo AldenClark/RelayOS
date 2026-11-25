@@ -7,7 +7,6 @@
 'require relay.system as systemManager';
 'require relay.agent-state as agentState';
 'require relay.wg-config as wgConfig';
-'require relay.ipsec as ipsec';
 
 const access = rpc.declare({ object: 'session', method: 'access',
   params: [ 'scope', 'object', 'function' ], expect: { access: false } });
@@ -40,7 +39,6 @@ function canonicalIPv4(option, prefixes = false, multiple = false) {
 
 function reloadRequired() {
   const error = new Error(_('Network changes may have been partially saved. Reload this page and review pending changes before applying again.'));
-  error.ipsecSafe = true;
   error.networkNeedsReload = true;
   return error;
 }
@@ -64,13 +62,13 @@ function lockMap(map) {
   };
 }
 
-function validateManagement(ipsecRoutes) {
+function validateManagement() {
   if (uci.get('network', 'lan', 'proto') !== 'static') return;
   const lan = list(uci.get('network', 'lan', 'ipaddr')).map(address =>
     wgConfig.subnet(address, uci.get('network', 'lan', 'netmask')));
   if (!lan.length || lan.some(net => !net || !net.prefix))
     throw new Error(_('Enter a valid management IPv4 address and contiguous subnet mask.'));
-  const reserved = ipsecRoutes.map(route => wgConfig.subnet(route));
+  const reserved = [];
   for (const section of uci.sections('network', 'interface')) {
     if (section.proto !== 'wireguard') continue;
     for (const address of list(section.addresses)) reserved.push(wgConfig.subnet(address));
@@ -78,16 +76,16 @@ function validateManagement(ipsecRoutes) {
       for (const route of list(peer.allowed_ips)) reserved.push(wgConfig.subnet(route));
   }
   if (lan.some(local => reserved.some(route => route && local.first <= route.last && route.first <= local.last)))
-    throw new Error(_('The management subnet conflicts with a WireGuard or IPsec tunnel.'));
+    throw new Error(_('The management subnet conflicts with a WireGuard tunnel.'));
 }
 
 return view.extend({
   load() {
     return Promise.all([uci.load('network'), uci.load('firewall'),
-      agentState.status().catch(() => null), ipsec.status().catch(() => null), networkWritable()]);
+      agentState.status().catch(() => null), networkWritable()]);
   },
 
-  render([_network, _firewall, agent, ipsecState, writable]) {
+  render([_network, _firewall, agent, writable]) {
     const map = new form.Map('network', _('Network interfaces'));
     map.readonly = !writable;
     this._networkMap = map;
@@ -147,10 +145,9 @@ return view.extend({
     }) : Promise.resolve(null)]).then(([node, wireguard]) => {
       return E('div', { class: 'ar-settings-page' }, [
         E('div', { class: 'ar-page-heading' }, E('h2', {}, _('Settings'))),
-        E('p', { class: 'ar-muted' }, _('Network and WireGuard changes are validated and applied together. IPsec has its own Save & Apply.')),
+        E('p', { class: 'ar-muted' }, _('Network and WireGuard changes are validated and applied together.')),
         node,
         wireguard || (agent ? '' : E('p', { class: 'ar-muted' }, _('Unable to detect AirRoute Agent.'))),
-        ipsec.render(ipsecState, agent, !L.hasViewPermission(), coordination),
         systemManager.render()
       ]);
     });
@@ -161,9 +158,7 @@ return view.extend({
     // Pinned ui.changes.apply() returns undefined, not a completion promise.
     // Its synchronous modal remains active through confirmation/rollback.
     if (this._networkBusy || document.body.classList.contains('modal-overlay-active')) {
-      const error = new Error(_('Another network operation is in progress. Try again shortly.'));
-      error.ipsecSafe = true;
-      throw error;
+      throw new Error(_('Another network operation is in progress. Try again shortly.'));
     }
     this._networkBusy = true;
     const unlock = [ this._networkMap, this._wireguardMap ].map(lockMap);
@@ -194,13 +189,8 @@ return view.extend({
         map.checkDepends();
         await map.parse();
       }
-      // IPsec changes update native network sections outside LuCI's UCI cache.
-      // Always validate against the latest protected prefixes, including off
-      // peers, instead of a stale page-load snapshot of generated sections.
-      const current = await ipsec.status();
-      const routes = current.peers.flatMap(peer => [ peer.local_address, ...peer.remote_subnets ]);
-      validateManagement(routes);
-      if (maps.length > 1) await wgConfig.prepare(this._wireguardMap, routes, current.enabled ? [ 500, 4500 ] : []);
+      validateManagement();
+      if (maps.length > 1) await wgConfig.prepare(this._wireguardMap);
       try { await uci.save(); }
       catch (error) {
         // Native UCI saves issue multiple RPCs in parallel. A rejection can
